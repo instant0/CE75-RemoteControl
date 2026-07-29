@@ -331,6 +331,15 @@ mode. This is correct for the length-prefixed protocol.
 - The `runScript` command allows arbitrary Lua execution in CE — equivalent
   to full memory read/write access to all attached processes.
 
+## Disclaimer
+
+Cheat Engine is a product of Eric "Dark Byte" Heijnen
+(https://cheatengine.org). This project is an independent, third-party
+remote-control interface that happens to communicate with Cheat Engine's
+Lua scripting system. It has not been endorsed, reviewed, or approved by
+Eric Heijnen or any Cheat Engine contributors, and is not affiliated with
+the Cheat Engine project in any official capacity.
+
 ## Requirements
 
 - Cheat Engine 7.5
