@@ -71,6 +71,7 @@ python client.py -i  # interactive shell
 |---|---|
 | `ping` | Returns "pong" |
 | `getVersion` | Server version string |
+| `help` | List available commands |
 | `readByte <hexaddr>` | Read 1 byte as hex |
 | `readBytes <hexaddr> <size>` | Returns hex-encoded bytes |
 | `readQword <hexaddr>` | Read 8 bytes as hex |
