@@ -321,6 +321,36 @@ mode. This is correct for the length-prefixed protocol.
 | `python: command not found` (Windows) | Python not on PATH | Reinstall Python and check "Add Python to PATH". |
 | WSL can't reach Windows | WSL2 network config | Use `ip route \| grep default` to get Windows host IP, then `python client.py --host <IP>`. |
 
+### Dangerous APIs (crash CE/relay)
+
+These CE Lua functions frequently crash the relay or CE itself when called from the background thread. **Avoid them:**
+
+| Function | Why it crashes | Safe alternative |
+|---|---|---|
+| `enumMemoryRegions()` | Returns protection-flag strings that crash the output parser; leaves CE in bad state | Use `enumModules()` for module bounds, or scan via `AOBScan` on known ranges |
+| `createMemScan()` / `Memscan_firstScan` | CE's scan engine is not thread-safe; interleaves with background thread state | Use the native `AOBScan` command instead — stable and proven |
+| `varscan_firstScan()` / `varscan_*` | Same issue as `createMemScan`; manipulates UI scan state | Use `AOBScan` |
+| `AOBScan(..., "w", ...)` with string protection flag | Protection flags must be numeric bitmask or 3-char `"rwx"` format; `"w"` alone parses as garbage | Use `AOBScan(..., 2, ...)` (2=write) or omit protection flag entirely |
+| `AOBScan` over >10MB range (via `runScript`) | Remote scan is slow; timeout/reset will leave server in bad state | Use the **native** `AOBScan` command instead: `AOBScan BC 12 00 00` — server handles it safely with `list.Text` + `list.destroy()` |
+| `UEngine_findObjectStart()` | Iterates disconnected object links; crashes with bitwise error on nil | Don't use; scan for known values instead |
+| `UEngine_getAllProperties(obj)` | Returns nil (not a table) unless passed a **class pointer** | Pass readQword(obj + 0x10) (the Class) instead of the object itself |
+| `UEngine_findObjectStart()` | Iterates disconnected object links; crashes with bitwise error on nil | Don't use; scan for known values via `AOBScan` instead |
+| `component_findComponentByName(obj, name)` | Only exists if G1R game plugin is loaded; crashes when absent | Wrap in `pcall` or load the plugin first |
+| `enumModules()` property access (via `runScript`) | Module table keys are `Address` (uppercase), not `address`; accessing a nil field in `string.format` can crash | Use the native `enumModules` command (returns tab-separated text); or check key names first |
+
+## Making `runScript` calls safe
+
+When you must use `runScript` (no native command exists), follow these rules:
+
+| Rule | Why | Example |
+|---|---|---|
+| Always wrap in `pcall` | CE functions can throw Lua errors that kill the background thread | `local ok, r = pcall(readQword, addr)` |
+| Never iterate unbounded loops | A nil pointer in a linked-list walk crashes the thread | Set a max iteration limit (e.g., `i < 100000`) |
+| Guard against nil in `string.format` | `format("%X", nil)` errors instead of producing "nil" | `local v = val or 0` before formatting |
+| Prefer native commands over raw CE API | Server wrapper handles cleanup (e.g., `list.destroy()`) | Use `AOBScan` not `runScript AOBScan(...)` |
+| Check if a function exists before calling | Plugin functions may not be loaded | `if type(UEngine_getAllProperties) == "function" then ... end` |
+| Verify object type before treating as UObject | A nil or non-UObject pointer has no Class at +0x10 | Check `readQword(addr + 0x10)` is non-zero before using |
+
 ## Security Considerations
 
 - The relay binds to `127.0.0.1` by default — only local connections.
@@ -330,6 +360,24 @@ mode. This is correct for the length-prefixed protocol.
   with Windows Firewall or SSH tunneling.
 - The `runScript` command allows arbitrary Lua execution in CE — equivalent
   to full memory read/write access to all attached processes.
+
+## Agent Skills
+
+The following skills are available for automated UE game memory hacking:
+
+| Skill | Purpose |
+|-------|---------|
+| `ue-character-finding` | Locate the player character via GEngine chain or CE75 helpers |
+| `ue-stats-attributes` | Find/modify health, mana, and GAS attribute values |
+| `ue-inventory-hacking` | Read/modify inventory item counts |
+| `ce-remote-scanning` | Memory scanning best practices and crash avoidance |
+
+Load with: `skill ue-character-finding`
+
+## Broad Reference
+
+See `UE-Memory-Patterns.md` for a distilled guide to UE memory layout patterns
+applicable across different games and UE versions.
 
 ## Disclaimer
 
