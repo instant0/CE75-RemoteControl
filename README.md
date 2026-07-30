@@ -24,6 +24,8 @@ CE's UI responsive. Each client connection gets its own pipe instance (CE
 creates single-instance pipes; after a client disconnects, the pipe is
 destroyed and a new one is created).
 
+![Project Screenshot](assets/ue-scan.png)
+
 ## Quick Start
 
 ### 1. Start the CE Lua server
