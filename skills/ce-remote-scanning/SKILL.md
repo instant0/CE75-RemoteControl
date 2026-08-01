@@ -146,21 +146,30 @@ for i = 0, math.min(count - 1, 10000) do ... end
 string.format("%X", val or 0)
 ```
 
+## HARD RULE — scan order + common values
+
+**Tattoo this.** Project rule: `.grok/rules/scan-scope.md`. Skill: **`docs-first`**.
+
+**AOB is sometimes right** (code fingerprints, module AOB). **Not every time. Not first.**  
+Order: docs → anchors/graph → selective value work → AOB if still needed.
+
+| OK | NEVER |
+|----|--------|
+| Dword/integer scan for a **distinctive** value (e.g. money **47628145**) | Full-process AOB / global hunt for common counts (**100**, **101**, **1000**, typical stacks) |
+| Walk known object graph; read known fields (`InventoryItem+0x10`) | “AOBScan the int32 of the stack count across the whole app” |
+| Code AOB in **gamedll/engine only** after docs/anchors | Opening every dig with full-process AOB |
+
+If the field offset is already known, **find the object** — do not re-scan the universe for the number.
+
 ## AOBScan Best Practices
 
 ```bash
-# Native command (preferred):
-AOBScan 12 BC 00 00           # scan for 4796 LE int32
-AOBScan 12 BC                  # scan for 2-byte pattern
-
-# Via runScript (when range needed):
-# NOTE: start/stop params may be ignored! Only full-process is reliable.
-# Use with caution and short timeout.
-runScript local r=AOBScan("12 BC 00 00"); return r and r.Count or 0
+# Native command — for CODE patterns / distinctive multi-byte sequences, NOT common counts:
+AOBScan <code or rare pattern>
 ```
 
 **Known issues:**
-- AOBScan on small values (< 65536) returns thousands of hits
+- AOBScan on small values (< 65536) returns thousands of hits — **do not do this for stack counts**
 - AOBScan range parameters (start, stop) are **ignored** in some CE versions
 - AOBScan on writable memory with `AOBScan(pattern, "w")` may crash
 - CT comments that say “should be unique” are **often wrong** after patches — plan for multi-hit ranking
@@ -173,14 +182,11 @@ This file stays focused on **safe remote APIs** and value scanning. Do not fork 
 
 ## Value Scanning Strategy
 
-When AOBScan is too noisy for small values:
-
-1. **Scan as float**: 4796.0 = bytes `00 E0 95 45` in LE
-2. **Scan as int64**: 4796 = `BC 12 00 00 00 00 00 00` (much more selective)
-3. **Delta scan**: Change the value in-game (drop/pick up item), then do a changed-value scan
-4. **Targeted scan**: Narrow to known module range via `getAddress` + `enumModules`
-5. **Pointer scan**: Find what points to the value via pointer-scanning
-6. **UE property walk**: Navigate the object model directly instead of scanning
+1. **Prefer object graph** when the field is known (e.g. cash at `InventoryMoney+0x38`, stacks at `InventoryItem+0x10`)
+2. **Distinctive dword/integer** only when the live value is selective enough (large unique money, etc.)
+3. **Delta / next scan** after an in-game change — still not “global AOB of 1000”
+4. **Module-bounded code AOB** (gamedll/engine) for instruction fingerprints
+5. **GroupScan** for multi-field layouts — not single common ints
 
 ## UObject Identification Pattern
 

@@ -14,6 +14,7 @@ Default: `192.168.176.1:8000`
 ## DON'T
 - Parallel relay calls / thrash / reconnect spam
 - Full-process / other-DLL scans — **gamedll + engine only** (see `scan-scope.md`)
+- **Global AOB of common small ints** (100/1000/stack counts) — see `scan-scope.md` HARD RULE
 - `enumMemoryRegions`, `createMemScan`, `varscan_*` from remote
 - `getStructure("Name")` — use `stFind` / `_ue_st_find_by_name`
 - Mass `Active=true`

@@ -5,7 +5,7 @@
 #   ./ce.sh                     # interactive shell
 #   ./ce.sh ping                # bare words → --cmd "…"
 #   ./ce.sh "readBytes AA 16"
-#   ./ce.sh --host 192.168.1.2 --cmd "tableStatus"
+#   ./ce.sh --host 192.168.176.1 --port 8000 --cmd "tableStatus"
 #   ./ce.sh -i
 #   ./ce.sh --timeout 120 --cmd "AOBScan 90 90"
 
