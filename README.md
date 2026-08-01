@@ -74,6 +74,11 @@ python client.py -i  # interactive shell
 | `ping` | Returns "pong" |
 | `getVersion` | Server version string |
 | `help` | List available commands |
+| `tableStatus` | Process, pid, address-list count, structure count (main thread) |
+| `debugSync` | Smoke-test main-thread `synchronize` path |
+| `alDump [offset] [limit]` | Address-list inventory TSV (no script bodies); CLASS=AA/EXPR/… |
+| `alGet <id>` | One memrec detail (metadata + value sample) |
+| `alResolve <id>` | Live CurrentAddress / readable / value |
 | `readByte <hexaddr>` | Read 1 byte as hex |
 | `readBytes <hexaddr> <size>` | Returns hex-encoded bytes |
 | `readQword <hexaddr>` | Read 8 bytes as hex |
@@ -82,7 +87,7 @@ python client.py -i  # interactive shell
 | `writeBytes <hexaddr> <hexbytes>` | Write hex bytes (e.g. `90 90`) |
 | `getAddress <name>` | Resolve `module+offset` or symbol to hex address |
 | `resolveSymbol <name>` | Alias for `getAddress` |
-| `AOBScan <hexpattern> [prot]` | Array-of-byte scan, returns tab-separated addresses |
+| `AOBScan <hexpattern>` | Array-of-byte scan (`**` wildcards allowed in v1.1+), returns addresses |
 | `enumModules` | List loaded modules |
 | `runScript <lua_code>` | Execute arbitrary CE Lua code |
 | `close` | Disconnect |
@@ -373,8 +378,10 @@ The following skills are available for automated UE game memory hacking:
 | `ue-stats-attributes` | Find/modify health, mana, and GAS attribute values |
 | `ue-inventory-hacking` | Read/modify inventory item counts |
 | `ce-remote-scanning` | Memory scanning best practices and crash avoidance |
+| `ce-table-remote` | Address-list/structure remote foundation (`sync_call`, tableStatus, rename notes) |
+| `game/DyingLight2/player-variables` | DL2 `playerStat` bootstrap AOB / EXPR row porting |
 
-Load with: `skill ue-character-finding`
+Load with: `skill ue-character-finding` (or path under `skills/`)
 
 ## Broad Reference
 

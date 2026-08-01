@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T02 |
-| **Status** | TODO |
+| **Status** | DONE (see T02-RESULTS.md) |
 | **Phase** | 1 — Address list read path |
 | **Parent** | T01 |
 | **Children** | T03, T04 (consume dump shape) |

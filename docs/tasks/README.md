@@ -48,7 +48,7 @@ T00  Spike (real table)
 | Phase | Tasks | Outcome |
 |-------|-------|---------|
 | 0 Spike | T00 | Prove CE APIs + remote constraints on real table — **DONE** (`T00-RESULTS.md`) |
-| 1 Address list | T01–T04 | Full memrec inventory + edit + script + enable |
+| 1 Address list | T01–T04 | Full memrec inventory + edit + script + enable — **T01–T02 DONE** |
 | 2 Structures | T05–T06 | Dissect dump/clone/edit |
 | 3 Agent surface | T07–T09 | Python + docs + skill |
 | 4 Quality | T10–T11 | Tests + optional polish |

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T01 |
-| **Status** | TODO |
+| **Status** | DONE (see T01-RESULTS.md) |
 | **Phase** | 1 — Foundation |
 | **Parent** | T00 (recommended) |
 | **Children** | T02, T05 (via shared helpers) |
