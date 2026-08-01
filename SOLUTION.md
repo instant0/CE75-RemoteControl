@@ -1,19 +1,36 @@
 # Remote CE 7.5 Server — Solution Design
 
+> **Historical design document — not the product contract.**
+>
+> What **shipped** is a `createThread` named-pipe server with memory I/O,
+> `AOBScan`, **`GroupScan`** (main-thread), `runScript` / `runScriptSafe`, and
+> full address-list / structure commands (`al*` / `st*`) via `synchronize`.
+> See `README.md`, `docs/TABLE-MIGRATE.md`, and `ce_server.lua` (`getVersion`).
+>
+> What did **not** ship: remote breakpoint push, register streaming, or a full
+> debugger protocol over TCP. That remains a non-goal for v1 — see
+> `docs/BREAKPOINT_STRATEGY.md` and `docs/NONGOALS-AND-HAZARDS.md`.
+>
+> Prefer those docs and the live code over any “Option 1 recommended” language
+> below. This file is kept for architecture rationale and CE source citations.
+
 ## Overview
 
-Three solutions are documented here. Option 1 (recommended) is a complete
+Three solutions were explored during design. Option 1 described a complete
 rewrite of `ce_server.lua` using CE's built-in `createThread` API to run the
-pipe server in a background thread, with a polling-model debugger that supports
-breakpoints, register inspection, and step control. Options 2 and 3 are
+pipe server in a background thread, **plus** a polling-model debugger
+(breakpoints, register inspection, step control). Options 2 and 3 were
 lighter-weight fallbacks.
 
-All three are **pure Lua scripts** — no Pascal source changes, no recompilation,
+The **background-thread pipe server** idea shipped; the **remote debugger**
+portion of Option 1 did **not**.
+
+All options are **pure Lua scripts** — no Pascal source changes, no recompilation,
 no DLL plugins. Paste into CE's Lua Engine (Ctrl+L) and click Execute.
 
 ---
 
-## Option 1: Full `createThread` server with debugger (Recommended)
+## Option 1: Full `createThread` server with debugger (design; debugger not shipped)
 
 ### Architecture
 

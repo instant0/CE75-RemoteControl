@@ -170,9 +170,21 @@ Stop and ask the user when:
 - Enable injects into multiplayer / anti-cheat sensitive contexts without explicit OK  
 - Structure form UI state is corrupted and needs manual CE recovery  
 
+## Offline `.CT` file edits (secondary path)
+
+Prefer live `al*` above. If editing a `.CT` **on disk**, read **`docs/CE-TABLE-OFFLINE-EDIT.md`** first.
+
+Hard rules when touching `<AssemblerScript>`:
+
+1. CE multi-line comments are `{` … `}` — **always close** the header block **before** `[ENABLE]` or `{$lua}`.  
+2. Unclosed `{` → entire script becomes a comment (silent failure).  
+3. After edit: brace count balanced + strip comments and confirm `aobscan` / inject body still active.  
+4. Retag `[Cheat][version]` **only** for entries you verified.  
+5. User must **reload** the file in CE if they already had it open.
+
 ## Out of scope
 
-- Agent `saveTable` / offline full CT generation as primary path  
+- Agent `saveTable` / generating a full new trainer `.CT` as primary path  
 - Perfect automatic understanding of all AA scripts  
 - Breakpoint push-over-TCP (see `docs/BREAKPOINT_STRATEGY.md`)  
 - Hotkeys, trainer forms, embedded table files  
@@ -198,5 +210,8 @@ Details and wire formats: **`docs/TABLE-MIGRATE.md`**.
 - Foundation skill: `ce-table-remote`  
 - AOB (any game): `ce-aob-scan`  
 - Full command ref: `docs/TABLE-MIGRATE.md`  
+- Offline CT XML: `docs/CE-TABLE-OFFLINE-EDIT.md`  
 - Per-game knowledge: `docs/game/<Title>/` (e.g. Dying Light 2)  
+- DL2 work order (no offsets): `skills/dl2-table-work`  
+
 

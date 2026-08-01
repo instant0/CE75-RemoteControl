@@ -13,6 +13,8 @@
 
 ## Mental model (start here)
 
+**Config vars** (not live HP/cash): use proved **PlayerState +0xBA8 → PlayerVariables** — [player-variables.md](player-variables.md). Host notes’ **+0xE8** is historical for this build.
+
 ```text
                     ┌─────────────────────────────┐
                     │  PlayerDI_PH  (entity hub)  │
@@ -20,10 +22,10 @@
               ┌───────────────────┼───────────────────┐
               ▼                   ▼                   ▼
      PlayerHealthModule    InventoryContainer    PlayerState
-              │              (+0x560 hist.)         +0xE8
+              │              (+0x560 hist.)         +0xBA8 (proved)
               ▼                   │                   ▼
-         LifeHealth          InventoryMoney    FloatPlayerVariable
-         +0x1C = HP          +0x38 = CASH       (config only)
+         LifeHealth          InventoryMoney    PlayerVariables
+         +0x1C = HP          +0x38 = CASH       (config only; this+8 catalog)
 ```
 
 | Want | Object | Offset | Type |

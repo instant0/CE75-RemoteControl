@@ -1,10 +1,11 @@
 # Dying Light 2 — PlayerVarsArray discovery (dissect generator)
 
-**Purpose:** Rebuild the **named offset map** for player configuration variables (`FloatPlayerVariable` / `PlayerVariables` field list) after a game update. That map feeds CE **dissect structures** and the `playerStat + offset` table rows.
+**Purpose:** Rebuild the **named offset map** for player configuration variables after a game update. That map feeds CE **dissect structures** and `PlayerVariables + offset` table rows.
 
+**Naming:** live catalog base = **`PlayerVariables`** (engine `this + 8`). Legacy CT: `playerStat`.  
 **AOB method:** `skills/ce-aob-scan`  
-**Live value base:** `player-variables.md` (**PlayerVariables** instance; legacy name `playerStat`)  
-**Related types:** `function-catalog.md`, `health-money.md`
+**Live instance locator:** [player-variables.md](player-variables.md) (proved **PlayerState+0xBA8**; not this generator)  
+**Related:** `function-catalog.md`, `health-money.md`, [../../CE-GROUP-SCAN.md](../../CE-GROUP-SCAN.md)
 
 ---
 
@@ -13,14 +14,14 @@
 | Location | What it is | How you get it | Use |
 |----------|------------|----------------|-----|
 | **A. Name/offset map** | Field **identity → offset** into the variables blob (registration) | PlayerVars AOB walker (`dl2_arrayscan_*`) | Structure like **`FloatPlayerVariable 20260801`**: names + offsets only |
-| **B. Live `playerStat` object** | Runtime instance of that blob | Bootstrap / cluster locate → `RegisterSymbol(playerStat)` | `playerStat + offset` for each named field; optional richer dissect (1.90 / “1.92-style”) |
+| **B. Live `PlayerVariables` catalog base** | Runtime base for map offsets (legacy `playerStat`) | [player-variables.md](player-variables.md) chain → `registerSymbol` | `PlayerVariables + offset` per field; optional richer dissect |
 
 Typical workflow:
 
 1. Run **generator** at (A) → versioned name map (`FloatPlayerVariable YYYYMMDD`).  
-2. Locate **`playerStat`** (B) — separate step; map does not include the base.  
-3. **Combine:** live value address = `playerStat + map[name].offset`.  
-4. Optionally attach a **slot dissect** (expanded layout below) on `playerStat` for typed viewing.
+2. Locate **live catalog base** (B) — **separate** step; map does not include the base. Prefer **PlayerState+0xBA8**, not GroupScan-first.  
+3. **Combine:** live value address = `PlayerVariables_catalog + map[name].offset`.  
+4. Optionally attach a **slot dissect** (expanded layout below) on the catalog base for typed viewing.
 
 CT may also contain older dumps: **`FloatPlayerVariable 1.82`**, **`FloatPlayerVariable 1.90`** (richer multi-element slots; offsets differ by build).
 
@@ -30,12 +31,12 @@ CT may also contain older dumps: **`FloatPlayerVariable 1.82`**, **`FloatPlayerV
 
 ```text
 FloatPlayerVariable 20260801     =  catalog:  Name  →  offset
-playerStat                       =  live base address of the blob
-playerStat + offset              =  where that field’s data starts in memory
+PlayerVariables (catalog base)   =  live base address of the blob  (legacy: playerStat)
+PlayerVariables + offset         =  where that field’s data starts in memory
 ```
 
-The arrayscan script is **only** responsible for the catalog. It does **not** invent `playerStat`.  
-Once `playerStat` is known, table rows / discovery entries are filled as **base + catalog offset**.
+The arrayscan script is **only** responsible for the catalog. It does **not** invent the live base.  
+Once the catalog base is known, table rows / discovery entries are filled as **base + catalog offset**.
 
 ### Why older CT structures look “wrong” per field
 
@@ -79,15 +80,17 @@ Concrete 1.90 Glide cost example:
 So for a **float** field with config default `D`, at rest you often see:
 
 ```text
-[playerStat + off + 0] = D   (or live actual)
-[playerStat + off + 4] = D   (base/config twin)
+[PlayerVariables + off + 0] = D   (or live actual)
+[PlayerVariables + off + 4] = D   (base/config twin)
 ```
 
 **Byte toggles** and **integers** use the same *idea* (typed cells + pair / tail) but **different sizes and strides** — do not assume 0x18 for bools (1.90 `GlideNitroAvailable` is byte-sized in the expanded dump).
 
 **Implication for scanning:** a single `0.25` is weak (many fields). A **pair** `0.25, 0.25` at `off` and `off+4`, plus **neighbor pairs** at catalog-relative gaps, is a real fingerprint.
 
-### How this helps Glide → `playerStat`
+### How this helps Glide → catalog base (research fallback)
+
+**Primary locator** remains [player-variables.md](player-variables.md) (`PlayerState+0xBA8`). Use multi-field Glide **GroupScan** only when that chain fails.
 
 Use **catalog offsets from `FloatPlayerVariable 20260801`** (not old 1.90 numbers alone) and **pair defaults** from CT names / known defaults:
 
@@ -106,12 +109,12 @@ GlideStartStaminaCost = GlideNitroStaminaCost - 0x100
 GlideNitroCooldown    = GlideNitroStaminaCost + 0x30
 ```
 
-Locate procedure:
+Locate procedure (fallback):
 
-1. **Group scan** (preferred) — see [CE-GROUP-SCAN.md](../../CE-GROUP-SCAN.md):  
+1. **Group scan** — see [CE-GROUP-SCAN.md](../../CE-GROUP-SCAN.md):  
    `F:0.34 F:0.34 W:16 F:0.1 F:0.1 W:224 F:0.25 F:0.25`  
-   then `playerStat = hit - 0x2820`.  
-2. `RegisterSymbol(playerStat, base)` only after multi-field agreement.  
+   then **catalog base** = `hit - 0x2820` (legacy: `playerStat`).  
+2. `registerSymbol("PlayerVariables", base)` (and optional `playerStat` alias) only after multi-field agreement + live disambiguation.  
 3. **Never** `F:0.25 F:0.25` alone (or any single-value pair) — thousands of hits.  
 4. Do **not** use only **old** 1.90 offsets without the **current** catalog.
 
@@ -201,7 +204,7 @@ Related but **not** the same blob:
 ```text
 PlayerHealthModule → LifeHealth<HealthFactors>   (runtime HP)
 InventoryMoney → Money @ +0x38                   (currency amount)
-PlayerState → ptr FloatPlayerVariable @ +0xE8    (link toward vars)
+PlayerState + 0xBA8 → PlayerVariables engine this  (proved link; host +0xE8 is historical)
 PlayerDI_PH                                      (player entity-ish)
 ```
 
@@ -209,16 +212,17 @@ PlayerDI_PH                                      (player entity-ish)
 
 ## Linking offsets to the address list
 
-Example CT rows (after `playerStat` resolves):
+Example CT rows (after **PlayerVariables** catalog base resolves):
 
 | Offset (hex) | Name (from FPV 1.90 / 1.82) | Notes |
 |--------------|----------------------------|--------|
-| `2E38` | InfiniteStamina (bool-ish) | table toggle |
-| `36C0` | MaxStamina | default ~0.8 |
-| `3438` | **MaxHealth** | **config** max, not current HP |
-| `2E78` / `2E90` | ItemsBuyFactor / ItemsSellFactor | economy multipliers (table money section) |
-| `23E0`… | Glide* costs | defaults in field names |
+| `2E38` | InfiniteStamina (bool-ish) | table toggle — use **byte** type |
+| `36C0` | MaxStamina | default ~0.8 (verify on **20260801** map) |
+| `3438` | **MaxHealth** | **config** max, not current HP (1.90-era; check current map) |
+| `2E78` / `2E90` | ItemsBuyFactor / ItemsSellFactor | economy multipliers |
+| `23E0`… | Glide* costs | defaults in field names (1.90 offsets differ from 20260801) |
 
+Prefer **20260801** offsets from the live structure over this historical table.  
 **Current hit points** and **old-world money amount** are usually **not** plain fields in this config blob — see `health-money.md`.
 
 ---
@@ -230,7 +234,7 @@ Example CT rows (after `playerStat` resolves):
 3. Fix `getInfo` parse (offset imm + string lea).  
 4. Regenerate structure → save as new versioned name (`FloatPlayerVariable YYYYMMDD`).  
 5. Diff a few known offsets (MaxStamina, MaxHealth, Glide*) vs old structure.  
-6. Retune **playerStat** data AOB separately (`ce-aob-scan` + player-variables skill).  
+6. Re-find **live catalog base** via [player-variables.md](player-variables.md) (chain A/B; not dead data AOB).  
 7. Update MEMORY tags to **YYYYMMDD** when verified.
 
 ---
@@ -312,6 +316,7 @@ Pipe note: if the relay is line-oriented, strip `--` comments and send as one lo
 | 2026-08-01 | Documented script, live 1.14 AOB → AnimGraph_BankName; two-location model; PDB type tree |
 | 2026-08-01 | Wrong path: all-vtSingle map labeled `…20260801-BROKEN` |
 | 2026-08-01 | Correct path: retuned `/mnt/r/dl2_arrayscan_20260801.lua` → CE struct `FloatPlayerVariable 20260801` (2449) |
-| 2026-08-01 | Documented map vs playerStat instance; dual actual/base values; named-value vs full entry; Glide pair fingerprint |
-| 2026-08-01 | Worked GroupScan method + two-heap disambiguation in player-variables.md |
+| 2026-08-01 | Documented map vs live **PlayerVariables** catalog base (legacy `playerStat`); dual actual/base; Glide pair fingerprint |
+| 2026-08-01 | GroupScan fallback + two-heap disambiguation → [player-variables-history.md](player-variables-history.md) |
+| 2026-08-01 | Naming pass: PlayerVariables primary; GroupScan not preferred locator |
 | 2026-08-01 | Dissect expand script `/mnt/r/dl2_fpv_dissect_from_map_20260801.lua` → `FloatPlayerVariable 20260801 Dissect` (~12.5k elems) |

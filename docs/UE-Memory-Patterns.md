@@ -1,5 +1,8 @@
 # Unreal Engine Memory Layout — Broad Patterns
 
+> **Scope: UE5 patterns (research base: Gothic 1 Remake).**  
+> Not applicable as a default map for Dying Light 2 (Techland `gamedll`/`engine`). DL2: [game/DyingLight2/INDEX.md](game/DyingLight2/INDEX.md).
+
 A distilled reference of how UE games typically organize character, stats, and inventory data in memory, based on Gothic 1 Remake (UE5) research.
 
 ## 1. The Core Chain

@@ -1,5 +1,8 @@
 # Dying Light 2 — usable RTTI types (engine / gamedll)
 
+> **Raw dump.** Prefer curated names in [function-catalog.md](function-catalog.md) and topic docs.  
+> Status: **raw extract** — [INDEX.md](INDEX.md). Not a live instance map.
+
 **Source:** offline MSVC RTTI (`.?AV` / `.?AU` strings) in:
 - `/mnt/r/engine_x64_rwdi.dll`
 - `/mnt/r/gamedll_ph_x64_rwdi.dll`
@@ -8,9 +11,17 @@
 
 **Filter:** player, level, inventory, health, time/weather, entity roots; template/GUI/lambda noise removed.
 
-**Related:** [function-catalog.md](function-catalog.md), [player-variables.md](player-variables.md).
+**Related:** [function-catalog.md](function-catalog.md), [player-variables.md](player-variables.md), [modules.md](modules.md).
 
 **Date:** 2026-08-01
+
+## How to use this file
+
+1. **Search** (`rg`, editor find) for a type fragment (`InventoryMoney`, `LifeHealth`, `TimeWeather`, `PlayerVariables`).  
+2. Prefer **gamedll** names for gameplay objects; **engine** for systems like TimeWeather / ILevel / IGame.  
+3. **Priority** section below is the high-signal subset for cheats — start there.  
+4. Full lists further down are bulk; do not treat every name as present or useful on the current build.  
+5. After finding a name, switch to topic docs for **offsets and chains** (this file has almost none).
 
 ## Priority (cheat / bootstrap relevant)
 

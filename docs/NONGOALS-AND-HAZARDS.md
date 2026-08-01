@@ -8,7 +8,7 @@ Product constraints and CE hazards for remote table work.
 | Non-goal | Reason |
 |----------|--------|
 | Agent `saveTable` / `loadTable` pipeline | User saves when table works |
-| Offline generation of a full new `.CT` file as primary engine | CE already holds scripts, hierarchy, structs; live rebind is correct model |
+| Offline generation of a full new `.CT` file as primary engine | CE already holds scripts, hierarchy, structs; live rebind is correct model. **Surgical** offline `.CT` XML edits are allowed when requested — see [CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md) |
 | Perfect automatic understanding of all AA scripts | Semantic / disassembly judgment |
 | Implementing breakpoint push-over-TCP in v1 | See `docs/BREAKPOINT_STRATEGY.md` |
 | Editing hotkeys, trainer forms, embedded table files | Out of migration path |

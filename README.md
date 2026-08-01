@@ -1,7 +1,25 @@
 # Cheat Engine 7.5 Remote Control for OPENCODE/WSL
 
-Bridge Cheat Engine 7.5's Lua scripting to TCP so an OPENCODE agent running in
-WSL can inspect and manipulate game memory.
+Bridge Cheat Engine 7.5's Lua scripting to TCP so an agent (OPENCODE, WSL, or
+local Python) can inspect and manipulate game memory and **rebind a loaded
+cheat table** without leaving CE.
+
+## Scope (read this first)
+
+| This repo **is** | This repo **is not** |
+|------------------|----------------------|
+| CE remote: `ce_server.lua` + `windows_relay.py` + `client.py` | A shipped full debugger / breakpoint push protocol |
+| Native commands for memory, AOB, **GroupScan**, address list, dissects | Offline bulk `.CT` generation or agent `saveTable` |
+| Game-agnostic **skills** under `skills/` (how to operate CE remote) | Per-game research dumps under `skills/` |
+| **Dying Light 2** knowledge under `docs/game/DyingLight2/` (only game tree so far) | Default “use UE GEngine/GAS skills for every title” |
+
+**Server version:** `ce_server.lua` reports via `getVersion` (currently **v1.8.3**, includes `GroupScan`). Reload the script in CE after git pull.
+
+**Docs hub:** [docs/README.md](docs/README.md) — migration, hazards, group scan, game knowledge.  
+**Historical design only:** [SOLUTION.md](SOLUTION.md) (early designs including remote BP; **not** the shipped product).  
+**Hazards / non-goals (canonical):** [docs/NONGOALS-AND-HAZARDS.md](docs/NONGOALS-AND-HAZARDS.md).
+
+**Defaults:** client/relay use `localhost:8888` and a 30s socket timeout. Lab examples may use another host/port (e.g. `192.168.176.1:8000`); always pass `--host` / `--port` when needed. Use **`--timeout 120`** (or higher) for `alSetActive`, large `AOBScan` / `GroupScan`, and large `stClone`.
 
 ## Architecture
 
@@ -61,18 +79,25 @@ stay in blocking mode for correct operation.
 ### 3. Test from WSL
 
 ```
-python client.py
 python client.py --cmd "ping"
+python client.py --cmd "getVersion"   # expect ce-server v1.8.3 …
+python client.py --cmd "tableStatus"
 python client.py --cmd "readQword 7FF6A1B2C000"
 python client.py -i  # interactive shell
 ```
 
+**Session log (optional):** `CE_SESSION_LOG=1 python client.py --cmd "ping"` appends REQ/RSP/ERR to `logs/ce-session.log`, or pass `--session-log /path`. Useful when blaming a hung/dead server.
+
+**Python helpers:** `from client import CERemote` — methods mirror the commands below (`al_dump`, `group_scan`, `aob_scan`, …). See `client.py` for signatures and per-call timeouts.
+
 ## Available Commands
+
+Authoritative list is also returned by `help` (pipe-separated). Keep this table in sync when adding server commands.
 
 | Command | Description |
 |---|---|
 | `ping` | Returns "pong" |
-| `getVersion` | Server version string |
+| `getVersion` | Server version string (e.g. `ce-server v1.8.3 (CE 7.5 groupscan)`) |
 | `help` | List available commands |
 | `tableStatus` | Process, pid, address-list count, structure count (main thread) |
 | `debugSync` | Smoke-test main-thread `synchronize` path |
@@ -91,7 +116,6 @@ python client.py -i  # interactive shell
 | `alApply stop=1 hex=…` | Batch setDesc/setAddress/setOffsets/setType (one sync) |
 | `alAudit [n]` | Recent command audit ring buffer |
 | `symGet` / `symSet` | Resolve / registerSymbol helpers |
-| `runScriptSafe <code>` | runScript with banned-API string filter |
 | `stDump` | List global dissect structures (name/size/elems) |
 | `stFind <name>` | Find structure by exact name |
 | `stGet <name> [elemOff] [elemLimit]` | Dump structure elements (default limit 500) |
@@ -109,12 +133,14 @@ python client.py -i  # interactive shell
 | `writeBytes <hexaddr> <hexbytes>` | Write hex bytes (e.g. `90 90`) |
 | `getAddress <name>` | Resolve `module+offset` or symbol to hex address |
 | `resolveSymbol <name>` | Alias for `getAddress` |
-| `AOBScan <hexpattern>` | Array-of-byte scan (`**` wildcards allowed in v1.1+), returns addresses |
+| `AOBScan <hexpattern>` | Array-of-byte scan (`**` wildcards allowed); returns addresses |
+| `GroupScan <command>` | CE grouped/structure scan (**main thread**, ≥ v1.8.3); see [docs/CE-GROUP-SCAN.md](docs/CE-GROUP-SCAN.md) |
 | `enumModules` | List loaded modules |
 | `runScript <lua_code>` | Execute arbitrary CE Lua code |
+| `runScriptSafe <code>` | `runScript` with banned-API string filter |
 | `close` | Disconnect |
 
-Any CE Lua API not listed can be called via `runScript`.
+Prefer **native** commands over `runScript` for the same job. Any other CE Lua API can still be attempted via `runScript` (with risk — see hazards).
 
 ## Table migration (address list & structures)
 
@@ -129,14 +155,16 @@ Port a **loaded** `.CT` to a new game build over this remote: rebind AOBs/script
 
 ```python
 from client import CERemote
-ce = CERemote("192.168.176.1", 8000, timeout=120)
+# Defaults: localhost:8888. Lab may use another host/port.
+ce = CERemote("localhost", 8888, timeout=120)
 print(ce.table_status())
 print(ce.al_dump(limit=20)[:500])
 ce.st_ensure_seed()  # if stCount was 0 — empty dissect list crashes CE
+# print(ce.group_scan("F:0.34 F:0.34 W:16 F:0.1 F:0.1"))  # needs ≥ v1.8.3; timeout 180
 ```
 
 **Order:** fix/enable bootstrap AA (symbols) → fix EXPR/POINTER rows → validate structures.  
-**Timeouts:** use **≥ 120s** for `alSetActive`, large `AOBScan`, large `stClone`.  
+**Timeouts:** use **≥ 120s** for `alSetActive`, large `AOBScan` / `GroupScan`, large `stClone`.  
 **Structures:** `stEnd` before `stSetName`; never `getStructure("name")`; keep `DO_NOT_DELETE_PLACEHOLDER`.
 
 ## Prerequisites
@@ -301,47 +329,27 @@ fresh TCP connection (and consequently a fresh pipe connection), sends
 one command, receives one response, and closes. Interactive mode (`-i`)
 opens a new connection per command as well.
 
-## Script Compatibility
+## `runScript` and external Lua
 
-The project contains ~52 Lua investigation scripts (in the parent directory).
-Our remote interface can execute **51 of 52** via `runScript`:
+This repository does **not** ship a large private Lua investigation suite. Local
+scratch scripts may live in gitignored `helper/` — promote **facts** into
+`docs/game/<Title>/`, not raw dumps.
 
-| Status | Count | Details |
-|--------|-------|---------|
-| **Works via runScript** | 51 | Use only CE native APIs accessible from a `createThread` background thread (`readBytes`, `readQword`, `getAddress`, `AOBScan`, etc.) |
-| **Completely fails** | 1 | `02_bp_inventory_path.lua` — relies on `debugger_onBreakpoint()` callback + `RIP`/`RSP`/`RCX` register globals that only exist during CE breakpoint events |
+Breakpoint-driven workflows (`debugger_onBreakpoint`, live register globals) do
+**not** work over the current request/response pipe. See
+[docs/BREAKPOINT_STRATEGY.md](docs/BREAKPOINT_STRATEGY.md) and non-goals.
 
-### Dependencies
+### CE APIs often used via `runScript`
 
-- **~31 scripts** depend on `UEngine_findCharacter()` from `CE75.LUA` — this
-  must be loaded into the CE Lua state first (execute via `runScript` or
-  manually in CE's Lua Engine) before running dependent scripts
-- **6 scripts** depend on `inventory_display_helper.lua` — must be loaded first
-- **5 scripts** use `io.open()` for file output — works from background thread
-- **AOBScan-based scripts** (14 scripts) may take 10-30s for full-process
-  scans; ensure client timeout is sufficient (`--timeout 60`)
+Prefer native commands when they exist (`AOBScan`, `GroupScan`, `read*`, `al*`, `st*`).
 
-### CE APIs Available via runScript
+- **Memory**: `readByte` / `readBytes` / `readQword` / `readInteger` / `readFloat` / `write*` / `readString`
+- **Scanning (prefer native)**: remote `AOBScan` and `GroupScan` — **do not** call `createMemScan` / `varscan_*` from the pipe server thread
+- **Symbols / modules**: `getAddressSafe`, `enumModules` (or native `enumModules` / `getAddress`)
+- **Process**: `getOpenedProcessID` (attach is normally done in the CE UI)
+- **File I/O**: `io.open` / write (works from background thread; still avoid huge dumps over the pipe)
 
-Any CE Lua function accessible from a `createThread` context can be called
-through `runScript`. This includes all functions verified safe from a
-background thread per the source analysis in `SOLUTION.md`:
-
-- **Memory**: `readByte`, `readBytes`, `readQword`, `readInteger`,
-  `readSmallInteger`, `readPointer`, `readFloat`, `readDouble`,
-  `readString`, `writeBytes`, `writeQword`, `writeInteger`,
-  `writeSmallInteger`, `writeByte`, `writeFloat`, `writeDouble`,
-  `writeString`
-- **Scanning**: `AOBScan`, `createMemScan`, `createFoundList`
-- **Symbols**: `getAddress`, `getAddressSafe`
-- **Modules**: `enumModules`, `getModuleSize`
-- **Process**: `openProcess`, `getOpenedProcessID`
-- **Debugger** (limited): `pause`, `unpause`, `debugProcess` (all use
-  `pluginsync`, work from background thread)
-- **Windows**: `findWindow`, `sendMessage`, `getWindow`
-- **Memory allocation**: `allocateMemory`, `virtualAllocEx`, `readString`,
-  `writeString`
-- **File I/O**: `io.open`, `io.write`, `io.close`
+Full early design notes (including unshipped debugger ideas): [SOLUTION.md](SOLUTION.md) — historical only.
 
 ## Named Pipe Mode
 
@@ -375,27 +383,23 @@ mode. This is correct for the length-prefixed protocol.
 
 ### Dangerous APIs (crash CE/relay)
 
-These CE Lua functions frequently crash the relay or CE itself when called from the background thread. **Avoid them:**
+**Canonical catalogue:** [docs/NONGOALS-AND-HAZARDS.md](docs/NONGOALS-AND-HAZARDS.md). Summary of common killers:
 
-| Function | Why it crashes | Safe alternative |
+| Function / pattern | Why it crashes | Safe alternative |
 |---|---|---|
-| `enumMemoryRegions()` | Returns protection-flag strings that crash the output parser; leaves CE in bad state | Use `enumModules()` for module bounds, or scan via `AOBScan` on known ranges |
-| `createMemScan()` / `Memscan_firstScan` | CE's scan engine is not thread-safe; interleaves with background thread state | Use the native `AOBScan` command instead — stable and proven |
-| `varscan_firstScan()` / `varscan_*` | Same issue as `createMemScan`; manipulates UI scan state | Use `AOBScan` |
-| `AOBScan(..., "w", ...)` with string protection flag | Protection flags must be numeric bitmask or 3-char `"rwx"` format; `"w"` alone parses as garbage | Use `AOBScan(..., 2, ...)` (2=write) or omit protection flag entirely |
-| `AOBScan` over >10MB range (via `runScript`) | Remote scan is slow; timeout/reset will leave server in bad state | Use the **native** `AOBScan` command instead: `AOBScan BC 12 00 00` — server handles it safely with `list.Text` + `list.destroy()` |
-| `UEngine_findObjectStart()` | Iterates disconnected object links; crashes with bitwise error on nil | Don't use; scan for known values instead |
-| `UEngine_getAllProperties(obj)` | Returns nil (not a table) unless passed a **class pointer** | Pass readQword(obj + 0x10) (the Class) instead of the object itself |
-| `UEngine_findObjectStart()` | Iterates disconnected object links; crashes with bitwise error on nil | Don't use; scan for known values via `AOBScan` instead |
-| `component_findComponentByName(obj, name)` | Only exists if G1R game plugin is loaded; crashes when absent | Wrap in `pcall` or load the plugin first |
-| `enumModules()` property access (via `runScript`) | Module table keys are `Address` (uppercase), not `address`; accessing a nil field in `string.format` can crash | Use the native `enumModules` command (returns tab-separated text); or check key names first |
-| `getStructure("Name")` (string arg) | Coerces to index **0** — can wipe/edit the first structure | Use native `stFind` / `stGet` or `_G._ue_st_find_by_name(name)` (index scan only) |
-| Empty global structure list (0 dissects) | Dissect UI/callbacks: `list index (0) out of bounds` | `stEnsureSeed` / keep `DO_NOT_DELETE_PLACEHOLDER`; never empty the list |
-| Rename structure while still editing (`beginUpdate`) | Rename fails or UI inconsistency | Always `stEnd` first, then `stSetName`; clones rename only after fill+commit |
-| Address list / structures / `Active` without main-thread sync | VCL crash / corruption | Use native `al*`/`st*` only (server uses `synchronize`) |
-| `synchronize` + CE modal dialog (failed AA) | **Deadlock** — pipe waits forever | `aaCheck` first; user present to dismiss; client timeout ≥120 |
-| Mass `Active=true` | Inject storms, reinterpret storms, freezes | Enable **one** bootstrap/inject at a time |
-| Dumping all AA scripts in one response | >48 KiB / hang | `alDump` metadata only; chunk with `alGetScript` / `al_get_script` |
+| `enumMemoryRegions()` | Bad state / parser issues | `enumModules` + targeted ranges |
+| `createMemScan` / `varscan_*` from server/`runScript` | Scan engine / UI thread issues | Native **`AOBScan`** or **`GroupScan`** (grouped, main-thread) |
+| `AOBScan(..., "w", ...)` bad prot | Prot parse garbage | Native `AOBScan` or numeric/`rwx` prot only |
+| Long AOB via raw `runScript` | Timeout / stuck server | Native `AOBScan` + high client timeout |
+| `getStructure("Name")` (string) | Index **0** coercion / wipe risk | Native `stFind` / `stGet` |
+| Empty global structure list | Dissect UI OOB | `stEnsureSeed` / keep `DO_NOT_DELETE_PLACEHOLDER` |
+| Rename structure mid-`beginUpdate` | UI/rename fail | `stEnd` then `stSetName` |
+| Address list / `Active` without main-thread sync | VCL crash | Native `al*` / `st*` only |
+| `synchronize` + CE modal (failed AA) | **Deadlock** | `aaCheck` first; user present; timeout ≥120 |
+| Mass `Active=true` | Inject storms / freezes | Enable **one** bootstrap at a time |
+| Dumping all AA scripts one response | >48 KiB / hang | `alDump` metadata; chunk scripts |
+
+UE/CE75 helpers (`UEngine_*`, G1R plugins) apply only when those scripts/plugins are loaded — **not** for Dying Light 2 by default.
 
 ## Making `runScript` calls safe
 
@@ -420,26 +424,42 @@ When you must use `runScript` (no native command exists), follow these rules:
 - The `runScript` command allows arbitrary Lua execution in CE — equivalent
   to full memory read/write access to all attached processes.
 
-## Agent Skills
+## Agent skills vs game knowledge
 
-The following skills are available for automated UE game memory hacking:
+**Skills** (`skills/`) teach how to operate the remote safely. They are not
+per-game research dumps.
 
-| Skill | Purpose |
-|-------|---------|
-| `ue-character-finding` | Locate the player character via GEngine chain or CE75 helpers |
-| `ue-stats-attributes` | Find/modify health, mana, and GAS attribute values |
-| `ue-inventory-hacking` | Read/modify inventory item counts |
-| `ce-remote-scanning` | Memory scanning best practices and crash avoidance |
-| `ce-table-remote` | Address-list/structure remote foundation (`sync_call`, seed, rename-after-commit) |
-| `ce-table-migrate` | Port loaded CT to new game build (AA → enable → pointers → structs) |
-| `game/DyingLight2/player-variables` | DL2 `playerStat` bootstrap AOB / EXPR row porting |
+| Skill | Purpose | When |
+|-------|---------|------|
+| `ce-remote-scanning` | Safe scans, timeouts, crash avoidance | Any game |
+| `ce-aob-scan` | AOB retune / ranking | Any game |
+| `ce-table-remote` | `al*`/`st*` foundation (seed, rename-after-commit) | Table work |
+| `ce-table-migrate` | Port loaded CT (AA → enable → pointers → structs) | Table work |
+| `dl2-table-work` | DL2 work order only (points at `docs/game/DyingLight2/`) | **Dying Light 2** |
+| `ue-character-finding` | GEngine / CE75 character chain | **UE games with CE75** only |
+| `ue-stats-attributes` | GAS / attribute sets | **UE + GAS** only |
+| `ue-inventory-hacking` | UE inventory component patterns | **UE** only |
 
-Load with: `skill ue-character-finding` (or path under `skills/`)
+**Dying Light 2** is Techland (`gamedll` / `engine`), **not** GEngine/GAS. Do **not**
+start with `ue-*` skills for DL2. Use:
 
-## Broad Reference
+- Skill: `skills/dl2-table-work` (work order)
+- Knowledge: [docs/game/DyingLight2/INDEX.md](docs/game/DyingLight2/INDEX.md) (status + topics)
+- PlayerVariables: [docs/game/DyingLight2/player-variables.md](docs/game/DyingLight2/player-variables.md)
+- Tools: `ce-table-migrate`, `ce-aob-scan`, `ce-remote-scanning`, [docs/CE-GROUP-SCAN.md](docs/CE-GROUP-SCAN.md)
 
-See `UE-Memory-Patterns.md` for a distilled guide to UE memory layout patterns
-applicable across different games and UE versions.
+## Further reading
+
+| Doc | Role |
+|-----|------|
+| [docs/README.md](docs/README.md) | Documentation index |
+| [docs/TABLE-MIGRATE.md](docs/TABLE-MIGRATE.md) | Table rebind reference |
+| [docs/NONGOALS-AND-HAZARDS.md](docs/NONGOALS-AND-HAZARDS.md) | Non-goals + crash catalogue |
+| [docs/CE-GROUP-SCAN.md](docs/CE-GROUP-SCAN.md) | Grouped scan language + remote API |
+| [docs/CE75-INTEGRATION.md](docs/CE75-INTEGRATION.md) | **UE / G1R + CE75** helpers (not DL2) |
+| [docs/UE-Memory-Patterns.md](docs/UE-Memory-Patterns.md) | **UE5** patterns (G1R-based; not DL2) |
+| [docs/BREAKPOINT_STRATEGY.md](docs/BREAKPOINT_STRATEGY.md) | Why remote BP is not shipped |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Server / protocol version notes |
 
 ## Disclaimer
 

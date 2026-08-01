@@ -20,13 +20,22 @@ Use this skill whenever you need to **find, re-find, or retune** an AOB for a lo
 | Cause | Symptom |
 |-------|---------|
 | Compiler / patch rewrote code | 0 hits or wrong site |
-| Immediate/disp changed (`+5C` → other) | 0 hits on tight pattern |
+| Immediate/disp changed (`+0x5C` → other) | 0 hits on tight pattern |
+| **Register / ModRM drift** (same op, different reg) | 0 hits; near-variant still unique |
 | Same opcode sequence elsewhere | **2+ hits**, wrong enable |
 | Wrong module | Hits in another DLL / none in target |
 | Data layout drift (bootstrap) | Hits but wrong object / bad child values |
+| RIP-rel global moved | Code AOB OK; hardcoded GLOBAL_RVA dead |
 | Stale CE labels in ORIGINAL CODE | Porter searches a function that never existed |
 
 CT comments like `// should be unique` are **not** guarantees after updates.
+
+**Code drift as a relocation signal** (full taxonomy D1–D6, ranking weights, tracker fields, **slide vs rewrite**): **`docs/AOB-CODE-DRIFT.md`**.  
+Short form: when exact AOB dies, classify drift (stable island / reg ModRM / disp / RIP-global / stack / rewrite) and use **post-inject island + control flow** to rank candidates — not first hit, not old absolute RVA.
+
+**Not pure size shift by default:** do **not** assume `new_RVA = old_RVA + Δ` for the whole module unless several **independent** sites share the same Δ. Re-links and local rewrites usually produce **different** deltas per site. AOB/island first; constant slide only as a soft hint after the Δ test.
+
+**Version tags:** product labels like `[Cheat][1.28]` come from the **game EXE** version string (user scheme). Offline truth for patterns is **module SHA / PE stamp**. Do **not** treat CI/Hudson path fragments inside DLL RSDS as the game version. Unmatched PDBs are **names only**, never address truth.
 
 ---
 
@@ -156,25 +165,18 @@ if hits >= 2: rank; enable only the winner; document losers in comments
 
 ## Step 5: Zero-hit recovery (AOB failed)
 
-Ordered fallbacks — stop when you can rebuild a pattern that ranks cleanly.
+Ordered fallbacks — stop when you can rebuild a pattern that ranks cleanly. Prefer **drift-aware** steps before nuking the pattern (see `docs/AOB-CODE-DRIFT.md`).
 
-1. **Shorten** to the inject opcode only; re-rank heavily (noisy).  
-2. **Wildcard** changed fields (disp8/32, imm, RIP-rel) one at a time.  
-3. **Named API anchor**  
-   - `getAddress Module.Class::Method`  
-   - Find call sites / xrefs (disasm scan, string → code, or known IAT)  
-   - Walk to the store/load you care about  
-   - Re-derive AOB from **new** bytes  
-4. **String / debug anchor**  
-   - `AOBScan` unique ASCII (`FeatureName::`, error strings, tag enums)  
-   - Move from data ref to code that uses it  
-5. **Value → writer**  
-   - Find live value (float/int) that matches the cheat’s semantics  
-   - Debugger “what writes” (limited over remote TCP — hand off if needed)  
-6. **Author secondary hints** in the old script header (other RVAs, related loads)  
-7. **Sibling cheats** in the same CT that still work — shared modules, similar ORIGINAL style  
+1. **Classify drift** from ORIGINAL CODE (reg next to inject? disp only? call rel only?).  
+2. **D2 register/ModRM:** try inject opcode + wildcard only the lea/mov ModRM; or scan known reg variants (`4A`↔`49` style). Rank by full island.  
+3. **Wildcard** changed fields (disp8/32, imm, RIP-rel, `E8 ?? ?? ?? ??`) one at a time.  
+4. **Lengthen after inject** with stable ops (often better than bare 2-byte inject).  
+5. **Shorten** to inject opcode only; re-rank heavily (noisy).  
+6. **Named API / string / RTTI anchor** (PDB **names** ok if unmatched; never PDB addresses).  
+7. **Value → writer** / debugger access log (hand off if remote-limited).  
+8. **Sibling cheats** in the same CT that still work — shared modules, similar ORIGINAL style  
 
-After recovery: write **pattern history** into the AA header (date, old bytes, new bytes, how you ranked).
+After recovery: write **pattern history** + **drift class** into the AA header and the per-game drift tracker (date, old bytes, new bytes, hits, RVA, how you ranked).
 
 ---
 
@@ -250,6 +252,7 @@ Verified: <today> — AOB OK on <process> / notes
 
 | Example | Where | Class |
 |---------|-------|-------|
+| Drift taxonomy D1–D6 + version authority | `docs/AOB-CODE-DRIFT.md` | methodology |
 | DL2 freeze time inject + multi-hit + engine names | `game/DyingLight2/time-weather/` | A code inject |
 | DL2 playerStat writable bootstrap | `game/DyingLight2/player-variables/` | B data |
 | DL2 module / API hierarchy lookup | `game/DyingLight2/FUNCTION-CATALOG.md` | C/D anchors |

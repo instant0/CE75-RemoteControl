@@ -1,5 +1,8 @@
 # Using CE75 Unreal Scripts with the Remote Tool
 
+> **Scope: Unreal / Gothic 1 Remake + CE75 plugin only.**  
+> Dying Light 2 does **not** use this stack. For DL2 see [game/DyingLight2/INDEX.md](game/DyingLight2/INDEX.md).
+
 ## Table inventory vs CE75 helpers
 
 Two complementary paths:

@@ -1,8 +1,10 @@
 # Table migration (address list + dissect structures)
 
-Port a **loaded** Cheat Engine 7.5 cheat table to a new game build over the UEScan remote. The agent rebinds AOB/scripts, pointer/expression rows, and structure definitions in the live table; the **user saves** in CE when satisfied. There is no agent `saveTable` / offline CT rewrite pipeline.
+Port a **loaded** Cheat Engine 7.5 cheat table to a new game build over the UEScan remote. The agent rebinds AOB/scripts, pointer/expression rows, and structure definitions in the live table; the **user saves** in CE when satisfied. There is no agent `saveTable` pipeline.
 
-Server: `ce_server.lua` (**v1.7+** recommended: seed + safe rename).  
+When you must edit a `.CT` **on disk** (CE offline / user-requested file patch), follow **[CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md)** — especially Auto Assembler multi-line `{` … `}` comments (unclosed `{` makes the whole script inert).
+
+Server: `ce_server.lua` (**≥ v1.7** for seed + safe rename; **≥ v1.8.3** for native `GroupScan` — see [CHANGELOG.md](CHANGELOG.md)).  
 Client: `client.py` helpers (`CERemote`).  
 Playbook skill: `skills/ce-table-migrate/SKILL.md`.  
 Risks / non-goals: `docs/NONGOALS-AND-HAZARDS.md`.
@@ -19,22 +21,22 @@ Risks / non-goals: `docs/NONGOALS-AND-HAZARDS.md`.
 ```text
 WSL agent  --TCP-->  windows_relay  --pipe-->  ce_server.lua (createThread)
                                               │
-                    al*/st*/Active/AA  ------►│ synchronize (main thread)
-                    read*/AOBScan     ------►│ background thread OK
+                    al*/st*/Active/AA/GroupScan ►│ synchronize (main thread)
+                    read*/AOBScan                 ►│ background thread OK
 ```
 
-- **Main thread only** for address list, structures, `Active`, AA (`sync_call` / `synchronize`).
+- **Main thread only** for address list, structures, `Active`, AA, **GroupScan** (`sync_call` / `synchronize`).
 - Soft response cap **~48 KiB** (pipe buffer 65536). Use pagination / script chunks.
-- Client timeout **≥ 120s** for `alSetActive`, large `AOBScan`, large `stClone`.
+- Client timeout **≥ 120s** for `alSetActive`, large `AOBScan` / `GroupScan`, large `stClone`.
 
 ## Connection
 
 ```bash
-# Lab example (adjust host/port)
-H=192.168.176.1; P=8000
+# Defaults are localhost:8888 — override for lab hosts
+H=localhost; P=8888
 python3 client.py --host $H --port $P --timeout 120 --cmd "ping"
 python3 client.py --host $H --port $P --timeout 120 --cmd "getVersion"
-# expect: ce-server v1.7 (CE 7.5 st-safe) or newer
+# expect: ce-server v1.8.x (or at least v1.7+ for st seed/rename)
 python3 client.py --host $H --port $P --timeout 120 --cmd "tableStatus"
 ```
 

@@ -1,7 +1,8 @@
 # Dying Light 2 — Character entry points: HP & money
 
 **Status:** CT dissect + PDB/DLL names + **re-mined host notes** (`/mnt/r`, 2026-08-01).  
-**Not yet on current attach:** proven live base for LifeHealth / InventoryMoney (need Phase 1–2 in strategy doc).
+**Confidence:** field offsets = **CT/host layout**; **live bases not proved** on current attach (see status matrix in [INDEX.md](INDEX.md)).  
+**Not yet on current attach:** proven live base for LifeHealth / InventoryMoney (need Phase 1–2 in [FIND-LIVE-HEALTH-MONEY.md](FIND-LIVE-HEALTH-MONEY.md)).
 
 **Related:** [FIND-LIVE-HEALTH-MONEY.md](FIND-LIVE-HEALTH-MONEY.md) (how to find them), [host-notes-extract.md](host-notes-extract.md), `player-vars-array.md`, `player-variables.md`, `function-catalog.md`
 

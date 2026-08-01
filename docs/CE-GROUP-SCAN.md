@@ -80,16 +80,20 @@ Python:
 from client import CERemote
 ce = CERemote("192.168.176.1", 8000, timeout=180)
 print(ce.group_scan("F:0.34 F:0.34 W:16 F:0.1 F:0.1 W:224 F:0.25 F:0.25"))
-# hit = first field (GlideStartStaminaCost); playerStat = hit - 0x2820
+# hit = first field (GlideStartStaminaCost)
+# PlayerVariables catalog base (legacy playerStat) = hit - 0x2820
 ```
 
 **Reload `ce_server.lua` in CE** after pull so `getVersion` shows `v1.8.3`.
 
 ---
 
-## Dying Light 2 — Glide group (FloatPlayerVariable 20260801)
+## Dying Light 2 — Glide group (example only)
 
-Catalog offsets (name map) and **default hints** from older CT naming (`… - 0.34`, `… - 0.25`) + dual actual/base floats:
+**Prefer the typed locator first:** [game/DyingLight2/player-variables.md](game/DyingLight2/player-variables.md) (`PlayerState+0xBA8`). Use GroupScan when the chain breaks after a patch or for research.
+
+Catalog offsets (name map) and **default hints** from older CT naming (`… - 0.34`, `… - 0.25`) + dual actual/base floats.  
+Legacy CT symbol `playerStat` = **PlayerVariables catalog base** (`engine this + 8`):
 
 | Field | Catalog offset | Default (hint) | Pair cells |
 |-------|----------------|----------------|------------|
@@ -147,7 +151,8 @@ FR:0.33-0.35 FR:0.33-0.35 W:16 FR:0.09-0.11 FR:0.09-0.11 W:224 FR:0.24-0.26 FR:0
 
 ## Agent rules
 
-1. Prefer **multi-field group** with real gaps (`W:…`) — never a single-value twin pair as a locate.  
-2. Use **current catalog offsets** (`FloatPlayerVariable YYYYMMDD`), not only old 1.90 numbers.  
-3. Remote: **`GroupScan`** command on main thread; do not ad-hoc `createMemScan` in `runScriptSafe`.  
-4. Hit = **first element**; subtract that field’s catalog offset to get `playerStat`.
+1. For DL2 **PlayerVariables**, prefer the typed **PlayerState+0xBA8** chain ([player-variables.md](game/DyingLight2/player-variables.md)) before GroupScan.  
+2. Prefer **multi-field group** with real gaps (`W:…`) — never a single-value twin pair as a locate.  
+3. Use **current catalog offsets** (`FloatPlayerVariable YYYYMMDD`), not only old 1.90 numbers.  
+4. Remote: **`GroupScan`** command on main thread; do not ad-hoc `createMemScan` in `runScriptSafe`.  
+5. Hit = **first element**; subtract that field’s catalog offset to get **PlayerVariables catalog base** (legacy name: `playerStat`).
