@@ -229,14 +229,24 @@ Details and discovery order: **`health-money.md`**, **`player-vars-array.md`**.
 
 ---
 
+## Engine player entry (host notes + engine strings)
+
+| Symbol / string | Status | Notes |
+|-----------------|--------|-------|
+| `IGame::GetLocalPlayerEntity` | **String / early notes** | Prefer resolve + confirm name; path to local entity / PlayerDI family |
+| `ILevel::GetIPlayerManager` | **String / early notes** | Alternate hub |
+| `GetLocalPlayerId` | **String in engine** | ID only |
+
+Live HP/money walk: see `FIND-LIVE-HEALTH-MONEY.md` (do not use DayNightCycle).
+
 ## Open questions (investigate next)
 
 1. Full `TimeWeather::CSystem` vtable / exported method list  
 2. Object identity: is `TIMESTRUCT` (gamedll this) the same as `GetTimeWeatherSystem` return, a wrapper, or a parallel state object?  
-3. `ILevel` other getters (player, inventory, quest…) for non-time cheats  
+3. Confirm `PlayerDI+0x560` inventory container on **current** build  
 4. Map remaining CT AA scripts → catalog entries  
 5. Confirm product version string for builds after 2026-06-14 package date  
-6. Live instance path: PlayerDI_PH → HealthModule / InventoryMoney  
+6. Live instance path: PlayerDI_PH → HealthModule / InventoryMoney (**in progress** — strategy doc)  
 7. Retune PlayerVars `getInfo` parser for 1.14+ encoding; full structure regen  
 
 ---

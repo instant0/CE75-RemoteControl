@@ -16,8 +16,12 @@
 | Modules (gamedll vs engine) | [modules.md](modules.md) |
 | Named APIs / class hierarchy | [function-catalog.md](function-catalog.md) |
 | playerStat / live config floats | [player-variables.md](player-variables.md) |
+| playerStat bootstrap (code AOB / access log; not GroupScan primary) | [player-variables.md](player-variables.md) |
+| Group scan (research multi-value only) | [../../CE-GROUP-SCAN.md](../../CE-GROUP-SCAN.md) |
 | FloatPlayerVariable offset map generator | [player-vars-array.md](player-vars-array.md) |
 | Current HP / money amount | [health-money.md](health-money.md) |
+| **How to find live HP & money** | [FIND-LIVE-HEALTH-MONEY.md](FIND-LIVE-HEALTH-MONEY.md) |
+| Host `/mnt/r` notes extract | [host-notes-extract.md](host-notes-extract.md) |
 | Time of day / DayNightCycle / freeze | [time-weather.md](time-weather.md) |
 | Dated investigation scraps | [scraps/](scraps/) |
 
@@ -34,6 +38,8 @@
 | Live HP | `LifeHealth+0x1C` via `PlayerHealthModule` |
 | Money | `InventoryMoney+0x38` |
 | Time frac | DayNightCycle / TIMESTRUCT `+0x5C` (not player entity) |
+| **Live HP** | `LifeHealth+0x1C` (not playerStat) |
+| **Live cash** | `InventoryMoney+0x38` |
 
 ---
 

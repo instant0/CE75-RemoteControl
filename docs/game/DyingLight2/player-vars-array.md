@@ -12,17 +12,110 @@
 
 | Location | What it is | How you get it | Use |
 |----------|------------|----------------|-----|
-| **A. Definition / init code** | Code that registers each field: **name string + offset** into the variables blob | **PlayerVars AOB** + walk `mov`/`lea` chain (script below) | Build **dissect** (`FloatPlayerVariable x.yy`, historically `PlayerVarsArray`) with correct **names + offsets** |
-| **B. Live values blob** | Runtime instance of those floats/bools | **`playerStat` / `playerStatAlt`** via writable AOB bootstrap (id 78) | Read/write actual numbers; EXPR rows `playerStat + off` |
+| **A. Name/offset map** | Field **identity → offset** into the variables blob (registration) | PlayerVars AOB walker (`dl2_arrayscan_*`) | Structure like **`FloatPlayerVariable 20260801`**: names + offsets only |
+| **B. Live `playerStat` object** | Runtime instance of that blob | Bootstrap / cluster locate → `RegisterSymbol(playerStat)` | `playerStat + offset` for each named field; optional richer dissect (1.90 / “1.92-style”) |
 
 Typical workflow:
 
-1. Run **generator** at (A) → global structure with thousands of named elements.  
-2. Enable **bootstrap** at (B) → `playerStat` points at live data.  
-3. Open dissect on `playerStat` (or attach structure) → see **values with names**.  
-4. Promote interesting offsets into address-list EXPR rows.
+1. Run **generator** at (A) → versioned name map (`FloatPlayerVariable YYYYMMDD`).  
+2. Locate **`playerStat`** (B) — separate step; map does not include the base.  
+3. **Combine:** live value address = `playerStat + map[name].offset`.  
+4. Optionally attach a **slot dissect** (expanded layout below) on `playerStat` for typed viewing.
 
-CT already contains versioned dumps: **`FloatPlayerVariable 1.82`**, **`FloatPlayerVariable 1.90`** (and group “[Cheat][1.42] FloatPlayerVariable…”).
+CT may also contain older dumps: **`FloatPlayerVariable 1.82`**, **`FloatPlayerVariable 1.90`** (richer multi-element slots; offsets differ by build).
+
+---
+
+## Name map vs object dissect (critical)
+
+```text
+FloatPlayerVariable 20260801     =  catalog:  Name  →  offset
+playerStat                       =  live base address of the blob
+playerStat + offset              =  where that field’s data starts in memory
+```
+
+The arrayscan script is **only** responsible for the catalog. It does **not** invent `playerStat`.  
+Once `playerStat` is known, table rows / discovery entries are filled as **base + catalog offset**.
+
+### Why older CT structures look “wrong” per field
+
+Historical dissects often **named the VALUE cell**, not the full **Entry** (header + value pair + tail):
+
+| What was named | What the entry actually is |
+|----------------|----------------------------|
+| e.g. `AgressionPerHit` on a single float | One **slot** in the blob with multiple cells |
+| Identity glued to “the float we freeze” | Not the whole record the engine uses |
+
+If generation were fully programmatic from type + size, CE elements would more likely be **Entry-scoped** (header, actual, base, trailing fields) instead of a single named float.
+
+### Dual float (and dual int): actual + base/config
+
+Observed on **`FloatPlayerVariable 1.90`** (float-style slot; Aggression / Glide costs):
+
+```text
+… header …          (often vt=12 / 8 bytes just before the named value)
++0x00  float   NAMED     ← treated as the field identity in old CT
++0x04  float   (unnamed) ← second value: base / config / load default (same type)
++0x08  …       short / other tail fields
++0x0C  …
+next entry header / next named value after a fixed stride (often 0x18 for float slots)
+```
+
+Concrete 1.90 Glide cost example:
+
+```text
++0x23F0  header
++0x23F8  float  GlideStaminaCost          (actual)
++0x23FC  float  (pair)
++0x2400  …
++0x24C0  header
++0x24C8  float  GlideNitroStaminaCost     (actual)   CT name even embeds " - 0.25"
++0x24CC  float  (pair / base)
++0x24F0  header
++0x24F8  float  GlideNitroCooldown
++0x24FC  float  (pair)
+```
+
+So for a **float** field with config default `D`, at rest you often see:
+
+```text
+[playerStat + off + 0] = D   (or live actual)
+[playerStat + off + 4] = D   (base/config twin)
+```
+
+**Byte toggles** and **integers** use the same *idea* (typed cells + pair / tail) but **different sizes and strides** — do not assume 0x18 for bools (1.90 `GlideNitroAvailable` is byte-sized in the expanded dump).
+
+**Implication for scanning:** a single `0.25` is weak (many fields). A **pair** `0.25, 0.25` at `off` and `off+4`, plus **neighbor pairs** at catalog-relative gaps, is a real fingerprint.
+
+### How this helps Glide → `playerStat`
+
+Use **catalog offsets from `FloatPlayerVariable 20260801`** (not old 1.90 numbers alone) and **pair defaults** from CT names / known defaults:
+
+| Name (20260801) | Offset | Known default hint (from old CT naming / docs) | Pair cells |
+|-----------------|--------|-----------------------------------------------|------------|
+| GlideStartStaminaCost | `+0x2820` | ~**0.34** (`… - 0.34` in 1.90) | `+2820`, `+2824` |
+| GlideStaminaCost | `+0x2838` | ~**0.10** | `+2838`, `+283C` |
+| GlideNitroStaminaCost | `+0x2920` | ~**0.25** | `+2920`, `+2924` |
+| GlideNitroCooldown | `+0x2950` | (check 1.90 / live) | `+2950`, `+2954` |
+
+Relative gaps (20260801):
+
+```text
+GlideStaminaCost      = GlideNitroStaminaCost - 0xE8
+GlideStartStaminaCost = GlideNitroStaminaCost - 0x100
+GlideNitroCooldown    = GlideNitroStaminaCost + 0x30
+```
+
+Locate procedure:
+
+1. **Group scan** (preferred) — see [CE-GROUP-SCAN.md](../../CE-GROUP-SCAN.md):  
+   `F:0.34 F:0.34 W:16 F:0.1 F:0.1 W:224 F:0.25 F:0.25`  
+   then `playerStat = hit - 0x2820`.  
+2. `RegisterSymbol(playerStat, base)` only after multi-field agreement.  
+3. **Never** `F:0.25 F:0.25` alone (or any single-value pair) — thousands of hits.  
+4. Do **not** use only **old** 1.90 offsets without the **current** catalog.
+
+Agent rule: **retune the known walker + this layout model** — do not invent an all-vtSingle substitute map.
 
 ---
 
@@ -140,8 +233,83 @@ Example CT rows (after `playerStat` resolves):
 
 ---
 
+## Method rule (do not re-litigate)
+
+Host scripts under **`/mnt/r/`** (and extracts in this folder) show **how things worked**. After a patch:
+
+1. **Retune that script** (AOB / imm position / LEA / search gap).  
+2. **Do not** invent a parallel “flat all-float” or N×M remote scorer.  
+3. Run the walker **once inside CE** (see remote note below).
+
+Game docs exist so the **approach** is known; agents must follow it.
+
+---
+
+## Live regenerate (CE) — `FloatPlayerVariable 20260801`
+
+### Script (not in git)
+
+| | |
+|--|--|
+| Historical | `/mnt/r/dl2_arrayscan_1.14.txt` |
+| **Retuned** | **`/mnt/r/dl2_arrayscan_20260801.lua`** |
+
+Same pipeline as 1.14: `AOBScanModuleUnique` → walk `0x44C7` / `0x84C7` → `addElement(Offset, Name)` → `addToGlobalStructureList`.
+
+| Decode constant | Historical 1.14 script | 20260801 retune |
+|-----------------|------------------------|-----------------|
+| AOB | `C7 44 24 20 00 00 00 00 4C 8D 4C 24 20` | unchanged (still hits) |
+| `C7 44` offset | `readInteger(addr+4)` | unchanged |
+| `C7 84` offset | `readInteger(addr+6)` | **`+7`** (`C7 84 24 disp32 imm32`) |
+| Name LEA | `+0xD` then `+0x13` | `C7 84`: prefer **`+0x13` then `+0xD`** |
+| Next `C7 84` gap | `0x500` | **`0x2000`** |
+| Structure name | `PlayerVarsArray` | `FloatPlayerVariable 20260801` |
+| Per-field `print` | yes | off (remote / large lists) |
+
+### In CT now
+
+| Item | Value |
+|------|--------|
+| **Structure** | **`FloatPlayerVariable 20260801`** |
+| Elements | **2449** (seed + walk; same class of output as the host script) |
+| Prior mistake | `FloatPlayerVariable 20260801-BROKEN` (flat all-`vtSingle` rewrite — keep only as warning label) |
+| Still present | `FloatPlayerVariable 1.82` / `1.90` (older dumps; offsets differ) |
+
+### Spot-check offsets (this build)
+
+| Name | Offset |
+|------|--------|
+| AnimGraph_BankName | `+0` |
+| AggresionPerHit | `+0x78` |
+| GlideNitroStaminaCost | `+0x2920` |
+| InfiniteStamina | `+0x32C8` |
+| MaxHealth | `+0x38F8` |
+| MaxStamina | `+0x3B98` |
+
+### Mistake to avoid (postmortem)
+
+Discarding the host walker and emitting every field as fixed 4-byte float was **wrong process**, not “required by new data.” Data organization is the same; only a few decode constants moved. **Always adjust the known script first.**
+
+### Remote CE: one `runScript` / `runScriptSafe` (not 2400 prompts)
+
+**Yes — upload/run the whole Lua body in a single command.** CE executes the loop in-process and builds all elements locally. The client only needs:
+
+1. One short AOB check (optional), then  
+2. **One** `runScriptSafe` with the full retuned script text  
+
+Do **not** `readInteger` / disasm per field over TCP. Optional: paste the same file into CE’s Lua Engine on the host.
+
+Pipe note: if the relay is line-oriented, strip `--` comments and send as one logical script payload (space-joined lines is fine for this file).
+
+---
+
 ## Change log
 
 | Date | Note |
 |------|------|
 | 2026-08-01 | Documented script, live 1.14 AOB → AnimGraph_BankName; two-location model; PDB type tree |
+| 2026-08-01 | Wrong path: all-vtSingle map labeled `…20260801-BROKEN` |
+| 2026-08-01 | Correct path: retuned `/mnt/r/dl2_arrayscan_20260801.lua` → CE struct `FloatPlayerVariable 20260801` (2449) |
+| 2026-08-01 | Documented map vs playerStat instance; dual actual/base values; named-value vs full entry; Glide pair fingerprint |
+| 2026-08-01 | Worked GroupScan method + two-heap disambiguation in player-variables.md |
+| 2026-08-01 | Dissect expand script `/mnt/r/dl2_fpv_dissect_from_map_20260801.lua` → `FloatPlayerVariable 20260801 Dissect` (~12.5k elems) |

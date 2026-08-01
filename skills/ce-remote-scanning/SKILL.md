@@ -35,6 +35,7 @@ These are exposed as server commands and are safe from background threads:
 | `readString <addr> <maxlen>` | Returns string |
 | `writeBytes <addr> <hex>` | Write hex bytes |
 | `AOBScan <pattern>` | Full-process AOB scan (returns tab-separated addresses) |
+| `GroupScan <cmd>` | CE **Grouped** multi-value scan (main-thread memscan; server ≥ v1.8.3). See `docs/CE-GROUP-SCAN.md` |
 | `enumModules` | List loaded modules |
 | `getAddress <name>` | Resolve symbol/module+offset |
 
@@ -89,8 +90,8 @@ These crash the CE relay or hang the server when called via `runScript`:
 | API | Crash reason | Alternative |
 |-----|-------------|-------------|
 | `enumMemoryRegions()` | Protection flag strings corrupt output | Use `enumModules` for module bounds |
-| `createMemScan()` / `Memscan_firstScan` | Not thread-safe, corrupts scan engine state | Use native `AOBScan` command |
-| `varscan_firstScan()` / `varscan_*` | Same, manipulates UI scan state | Use `AOBScan` |
+| `createMemScan()` / `Memscan_firstScan` | Not thread-safe off main thread | Native `AOBScan` or **`GroupScan`** (server wraps memscan in `synchronize`) |
+| `varscan_firstScan()` / `varscan_*` | Same, manipulates UI scan state | `AOBScan` / `GroupScan` |
 | `AOBScan` with string protection `"w"` | Parses garbage; use numeric bitmask | Omit protection or use `AOBScan(pattern, 2)` |
 | `UEngine_findObjectStart()` | Crashes on disconnected object links | Don't use |
 | `component_findComponentByName(obj, name)` | Only exists when game plugin is loaded | Wrap in `pcall` |

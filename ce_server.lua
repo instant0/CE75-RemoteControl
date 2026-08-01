@@ -1,6 +1,6 @@
 local PIPE_NAME = "UEScanRemote"
 local PIPE_BUFFER = 65536
-local VERSION = "ce-server v1.8.2 (CE 7.5 qol+exec-log)"
+local VERSION = "ce-server v1.8.3 (CE 7.5 groupscan)"
 local MAX_RESP = 48000
 local MAX_OFFSETS = 512
 local MAX_SCRIPT_BYTES = 262144  -- 256 KiB staging cap
@@ -979,6 +979,7 @@ local function process_command(cmd)
       "writeBytes <hexaddr> <hex>",
       "getAddress <symbol>", "resolveSymbol <name>",
       "AOBScan <hexpattern with optional ** wildcards>",
+      "GroupScan <group command string>  (CE vtGrouped; main-thread memscan)",
       "enumModules", "runScript <code>", "runScriptSafe <code>", "close"
     }, "|")
   elseif cmd == "getVersion" then
@@ -1845,6 +1846,53 @@ local function process_command(cmd)
     pcall(function() list.destroy() end)
     if result == "" then return "ERROR: AOBScan returned nothing" end
     return fit_response(result)
+
+  -- Grouped / structure scan (CE groupscancommandparser.pas). Runs on main
+  -- thread: createMemScan from the pipe thread is unsafe (see skill).
+  -- Hit address = start of the group block (first element). Cap returned hits.
+  elseif cmd:match("^[Gg]roup[Ss]can%s+(.+)$") then
+    local gscmd = cmd:match("^[Gg]roup[Ss]can%s+(.+)$")
+    gscmd = (gscmd and gscmd:match("^%s*(.-)%s*$")) or ""
+    if gscmd == "" then
+      return "ERROR: USAGE: GroupScan <command>  e.g. F:0.34 F:0.34 W:16 F:0.1 F:0.1 W:224 F:0.25 F:0.25"
+    end
+    local maxHits = 200
+    local packed = sync_call(function()
+      if type(createMemScan) ~= "function" then
+        error("createMemScan not available")
+      end
+      local ms = createMemScan()
+      if not ms then error("createMemScan returned nil") end
+      local fl = createFoundList(ms)
+      -- soExactValue=1, vtGrouped=14, rtRounded=0, fsmAligned=1
+      -- firstScan(scanOpt, vt, round, in1, in2, start, stop, prot, alignType, alignParam, hex, notBin, uni, case)
+      ms.firstScan(1, 14, 0, gscmd, "", 0, 0x7FFFFFFFFFFFFFFF,
+        "+W", 1, "4", false, true, false, false)
+      if type(ms.waitTillDone) == "function" then
+        ms.waitTillDone()
+      end
+      fl.initialize()
+      local count = fl.Count or 0
+      local lines = { "COUNT=" .. tostring(count) }
+      local n = math.min(count, maxHits)
+      for i = 0, n - 1 do
+        local a = fl.Address[i]
+        if a == nil and type(fl.getAddress) == "function" then
+          a = fl.getAddress(i)
+        end
+        lines[#lines + 1] = tostring(a)
+      end
+      if count > maxHits then
+        lines[#lines + 1] = string.format("TRUNCATED maxHits=%d", maxHits)
+      end
+      pcall(function() fl.deinitialize() end)
+      pcall(function() fl.destroy() end)
+      pcall(function() ms.destroy() end)
+      return table.concat(lines, "\n")
+    end)
+    local data, err = ok_data(packed)
+    if not data then return err end
+    return fit_response(tostring(data))
 
   elseif cmd:match("^runScriptSafe%s+(.+)$") then
     local code = cmd:match("^runScriptSafe%s+(.+)$")

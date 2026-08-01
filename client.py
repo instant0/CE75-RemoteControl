@@ -405,6 +405,12 @@ class CERemote:
     def aob_scan(self, pattern: str, timeout: Optional[float] = 120) -> Optional[str]:
         return self.cmd(f"AOBScan {pattern}", timeout=timeout)
 
+    def group_scan(self, group_command: str, timeout: Optional[float] = 180) -> Optional[str]:
+        """CE grouped scan (vtGrouped). Multi-field command with W: gaps; not a lone float pair.
+        Example: 'F:0.34 F:0.34 W:16 F:0.1 F:0.1 W:224 F:0.25 F:0.25'.
+        Hit = start of block (first element). See docs/CE-GROUP-SCAN.md."""
+        return self.cmd(f"GroupScan {group_command}", timeout=timeout)
+
     def enum_modules(self, timeout: Optional[float] = 60) -> Optional[str]:
         return self.cmd("enumModules", timeout=timeout)
 

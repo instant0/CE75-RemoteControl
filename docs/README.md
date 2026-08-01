@@ -7,6 +7,7 @@
 | [CE75-INTEGRATION.md](CE75-INTEGRATION.md) | CE75 helpers vs raw al/st |
 | [BREAKPOINT_STRATEGY.md](BREAKPOINT_STRATEGY.md) | Debugger / BP design notes |
 | [UE-Memory-Patterns.md](UE-Memory-Patterns.md) | UE memory patterns |
+| [CE-GROUP-SCAN.md](CE-GROUP-SCAN.md) | CE Grouped scan language (source-verified) + remote `GroupScan` + DL2 Glide example |
 | [game/DyingLight2/](game/DyingLight2/) | **Extracted** DL2 knowledge (offsets, catalogs, scraps) |
 
 ## Rules

@@ -1,9 +1,21 @@
 # Dying Light 2 — Character entry points: HP & money
 
-**Status:** Research from CT dissect structures + PDB/DLL names + live structure list (2026-08-01).  
-**Not yet:** live `playerStat` resolve (bootstrap AOB still stale) or proven live read of current HP/money on this attach.
+**Status:** CT dissect + PDB/DLL names + **re-mined host notes** (`/mnt/r`, 2026-08-01).  
+**Not yet on current attach:** proven live base for LifeHealth / InventoryMoney (need Phase 1–2 in strategy doc).
 
-**Related:** `player-vars-array.md`, `player-variables.md`, `function-catalog.md`, `modules.md`
+**Related:** [FIND-LIVE-HEALTH-MONEY.md](FIND-LIVE-HEALTH-MONEY.md) (how to find them), [host-notes-extract.md](host-notes-extract.md), `player-vars-array.md`, `player-variables.md`, `function-catalog.md`
+
+---
+
+## Host-note corrections / additions (2026-08-01)
+
+| Finding | Detail |
+|---------|--------|
+| Money reader | `mov r32,[rcx+38]` with RCX=`InventoryMoney` (1.83/1.90); jmp `[rax+D8]` nearby |
+| Inventory map | `PlayerDI_PH+0x560` → container; container `+38` Money … `+78` Token (1.11.4) |
+| LifeHealth vs module | Live dumps often show LifeHealth ≈ **PlayerHealthModule+0x48** (also try CT **+0x88**) |
+| PlayerDI from money | `InventoryMoney+0x18` → PlayerDI_PH |
+| Engine entry | `IGame::GetLocalPlayerEntity`, `ILevel::GetIPlayerManager` |
 
 ---
 
@@ -152,3 +164,4 @@ Require live **`playerStat`** to sample.
 | Date | Note |
 |------|------|
 | 2026-08-01 | Mapped HP vs config MaxHealth; InventoryMoney+0x38; FPV offsets; PDB class list; blocked on playerStat + instance bases |
+| 2026-08-01 | Host re-mine: strategy doc + host-notes-extract; module+0x48 LifeHealth note; engine GetLocalPlayer* |
