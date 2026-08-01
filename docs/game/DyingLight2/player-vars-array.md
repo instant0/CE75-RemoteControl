@@ -3,7 +3,7 @@
 **Purpose:** Rebuild the **named offset map** for player configuration variables (`FloatPlayerVariable` / `PlayerVariables` field list) after a game update. That map feeds CE **dissect structures** and the `playerStat + offset` table rows.
 
 **AOB method:** `skills/ce-aob-scan`  
-**Live value base:** `player-variables.md` (`playerStat` bootstrap)  
+**Live value base:** `player-variables.md` (**PlayerVariables** instance; legacy name `playerStat`)  
 **Related types:** `function-catalog.md`, `health-money.md`
 
 ---
@@ -186,10 +186,12 @@ From `gamedll` PDB strings + live RTTI-style names (2022 PDB ≠ 2026 RVAs; name
 
 ```text
 PlayerVariables                          (constds field collection / dataset)
-├── FloatPlayerVariable                  (bulk of CT offsets)
-├── BoolPlayerVariable
-├── StringPlayerVariable
+├── FloatPlayerVariable                  (bulk of CT offsets; **live RTTI on float slots**)
+├── BoolPlayerVariable                   (**live RTTI** on flag-style slots)
+├── StringPlayerVariable                 (**live RTTI** at engine object `this+0` on one attach)
 └── HealthPlayerVariable<HealthFactors>
+
+Live RTTI + gamedll type strings (2026-08-01): see **player-variables.md** § *Game type identity*.
 
 MenuDevPlayerVariables / ReloadPlayerVariables   [strings in 2026 gamedll]
 ```

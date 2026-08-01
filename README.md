@@ -367,7 +367,7 @@ mode. This is correct for the length-prefixed protocol.
 | Connection refused (Windows) | Port conflict | Use `--port` to change port. Process list: `netstat -ano \| find :8888`. |
 | CE freezes (only if running old synchronous `ce_server.lua`) | Old version called `main()` on main thread | Update to the current `ce_server.lua` which uses `createThread` for background execution. |
 | Server responds to first command but hangs on reconnection | CE's `CreateNamedPipe` creates a single-instance pipe and `acceptConnection` doesn't call `DisconnectNamedPipe` before `ConnectNamedPipe` | Already fixed in current `ce_server.lua` — destroys and recreates the pipe per client. |
-| No response from CE server after fresh start | CE running the Lua script but pipe not ready yet | Wait 1-2s after executing script, then retry. Relay retries pipe connection 10 times with 1s delays. |
+| Relay: cannot connect to pipe after it worked | Lua pipe thread **killed/hung by a prior client command** (not “cold start flaky”) | Reload `ce_server.lua`. Relay does **not** retry pipe open — one attempt, then fail. |
 | Timeout reading from pipe in relay | Client disconnected abruptly | No action needed — relay cleans up automatically. |
 | CE server doesn't detect disconnection (pipe appears busy) | Pending `ReadFile` in relay's `pipe_to_tcp` thread holds kernel reference after `CloseHandle` | Fixed in relay — uses `CancelIoEx` to cancel pending I/O across all threads before closing the handle. |
 | `python: command not found` (Windows) | Python not on PATH | Reinstall Python and check "Add Python to PATH". |

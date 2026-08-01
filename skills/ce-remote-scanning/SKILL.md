@@ -71,6 +71,34 @@ The relay used to log only the **verb** (`Received: getAddress`). If the handler
 
 If the thread dies, **the last line is usually `EXEC start`** for the bad call — no matching `EXEC done`.
 
+### Relay: `Failed to connect to pipe` — what actually happened
+
+Stack: **Linux `client.py` → TCP → `windows_relay.py` → named pipe → `ce_server.lua` in CE**.
+
+**Observed ops truth (believe this first):**
+
+1. After the user reloads `ce_server.lua`, the server **works**.  
+2. It keeps working until a **client/agent command kills or hangs** the Lua pipe thread (bad API, wrong-thread VCL, unbounded walk, etc.).  
+3. Then the relay reports pipe connect failure — **because the server is dead**, not because “restart left it unavailable” or a spontaneous race.  
+4. Reload → works again → next bad agent work kills it again.
+
+Do **not** write runbooks that blame “pipe not ready after restart,” “transient race,” or “server flaky.” Default blame: **last agent command / command flood killed the listener.**
+
+| Log | Meaning |
+|-----|---------|
+| `[relay] Failed to connect to pipe '…UEScanRemote'` | **No pipe listener.** Usually: server thread already dead (agent killed it) or never started. |
+| CE: `EXEC done #N ok` then `Client disconnected` / pipe recreate | **Normal** end of one client session. Not a crash. |
+| CE: `EXEC start` **without** `EXEC done` | **That command** hung or hard-killed the Lua server thread. |
+| CE: no `[server]` lines | Server not loaded — user must run `ce_server.lua`. |
+
+Relay: **one** pipe open attempt per TCP client — no retries. Fail = fail. Client must not spam reconnects (that does not revive a dead server; it only piles pressure).
+
+#### Health check rule
+
+- **One `ping` → `pong`** = server is up.  
+- No pong / connect fail after a known-good session = treat as **agent-killed or hung server**; reload `ce_server.lua`.  
+- Do not invent “race” as the story when the server was healthy until your last heavy call.
+
 **Client session log (optional):**
 
 ```bash

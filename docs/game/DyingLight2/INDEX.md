@@ -15,8 +15,8 @@
 |-------|------|
 | Modules (gamedll vs engine) | [modules.md](modules.md) |
 | Named APIs / class hierarchy | [function-catalog.md](function-catalog.md) |
-| playerStat / live config floats | [player-variables.md](player-variables.md) |
-| playerStat bootstrap (code AOB / access log; not GroupScan primary) | [player-variables.md](player-variables.md) |
+| **PlayerVariables** (live config; was playerStat) | [player-variables.md](player-variables.md) |
+| Detect PlayerVariables (PlayerState+0xBA8 chain) | [player-variables.md](player-variables.md) § detection |
 | Group scan (research multi-value only) | [../../CE-GROUP-SCAN.md](../../CE-GROUP-SCAN.md) |
 | FloatPlayerVariable offset map generator | [player-vars-array.md](player-vars-array.md) |
 | Current HP / money amount | [health-money.md](health-money.md) |
@@ -34,7 +34,7 @@
 | Process | `DyingLightGame_x64_rwdi.exe` |
 | Most injects | `gamedll_ph_x64_rwdi.dll` |
 | Named systems | often `engine_x64_rwdi.*` |
-| Config floats | `playerStat` + offset (`FloatPlayerVariable` map) |
+| Config floats | **PlayerVariables** catalog base + offset; find via **PlayerState+0xBA8** — [player-variables.md](player-variables.md) |
 | Live HP | `LifeHealth+0x1C` via `PlayerHealthModule` |
 | Money | `InventoryMoney+0x38` |
 | Time frac | DayNightCycle / TIMESTRUCT `+0x5C` (not player entity) |

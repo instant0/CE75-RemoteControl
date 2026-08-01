@@ -1,26 +1,279 @@
-# Dying Light 2 — Player variables (playerStat)
+# Dying Light 2 — PlayerVariables (live config vars)
 
-Use when porting or debugging a CE table that uses **`playerStat`** / **`playerStatAlt`** symbols and dozens of `playerStat + offset` value rows (InfiniteStamina, glide, combat floats, etc.).
+**Canonical name:** **`PlayerVariables`** (game/PDB/container).  
+**Legacy CT symbol:** `playerStat` / `playerStatAlt` — treat as old aliases for the **catalog base** of this object; new work should use **`PlayerVariables`**.
+
+Use when porting or debugging table rows that are balancing/config floats (stamina, glide, HoldJump, buy/sell factors, etc.).
 
 ## Mental model (map + instance + dual values)
 
 | Piece | Meaning |
 |-------|---------|
+| **`PlayerVariables`** | Live **aggregate** instance (config/balancing). Engine `this` + optional catalog origin at **`this+8`**. |
 | **`FloatPlayerVariable YYYYMMDD`** | **Name → offset** catalog only (registration walk). See [player-vars-array.md](player-vars-array.md). |
-| **`playerStat` / `playerStatAlt`** | **Catalog live base** = registration origin (table EXPRs). On this build = **engine `this` + 8**. |
-| **Engine object `this`** | Register from access log (e.g. RAX on HoldJump readers); **`[this]`** is module vtable; field e.g. HoldJump = `[this+0x2F90]`. |
-| **Value address** | `playerStat + catalog_offset` (= `this + catalog_offset + 8`) |
-| **Float/int entry** | Often **two** same-type cells: **actual** at `+0`, **base/config** at `+4`, then tail; next float entry commonly **+0x18** from named value in older expanded dissects. |
-| **Expanded 1.90-style dissect** | Optional view of the **object** (headers, pairs, bytes). Old tables often **named only the value float**, not the whole entry — so layout can look “incomplete” even when offsets work for cheats. |
+| **Engine `this`** | Pointer game code uses. HoldJump = `[this+0x2F90]`. Outer RTTI at +0: **`StringPlayerVariable`**. |
+| **Catalog base** | **`this + 8`** — origin for registration/map offsets (`HoldJump` map `+0x2F88`, etc.). |
+| **Value address** | `PlayerVariables_catalog + catalog_offset` (= `this + 8 + off`) |
+| **Slot types** | **`FloatPlayerVariable`**, **`BoolPlayerVariable`**, **`StringPlayerVariable`** (RTTI on cells / head) |
+| **Float entry layout** | Often **actual** @+0, **base/config** @+4; stride often `0x18` |
 
-**Do not** treat the name-map structure as a substitute for finding `playerStat`.  
-**Do not** treat a single default float (e.g. one `0.25`) as unique — use **value pairs + Glide (or other) multi-field gaps** from the current catalog.
+**Do not** treat the name-map structure as a substitute for finding the live **`PlayerVariables`** instance.  
+**Do not** use GroupScan / interior data AOB as the primary locator when a typed pointer chain exists (below).
 
-Glide fingerprint detail and dual-value layout: **player-vars-array.md** (sections *Name map vs object dissect* and *How this helps Glide*).
+Glide fingerprint / dual-value layout: **player-vars-array.md**.
 
 ---
 
-## Discovering the live base: “Find what accesses” (preferred research path)
+## Game type identity (RTTI + strings, 2026-08-01)
+
+**Goal:** locate the vars object the way the game names it (same class of solution as engine `GetTimeWeather*` / typed systems) — not only anonymous GroupScan / data AOB.
+
+### Live instance (one attach; re-check after restart)
+
+| | Address / note |
+|--|----------------|
+| Engine `this` (code base, RAX after getter) | `211C729B010` (example) |
+| Catalog / CT `playerStat` | `this + 8` → e.g. `211C729B018` |
+| gamedll base (same attach) | `7FFA1FE20000` |
+
+### CE `getRTTIClassName` on live memory
+
+| Location | RTTI class name |
+|----------|-----------------|
+| Engine object **`this` (+0)** | **`StringPlayerVariable`** |
+| Float field slots (header = value−8), e.g. Aggresion, HoldJump, MaxStamina, Cable | **`FloatPlayerVariable`** |
+| Byte/flag style slot (e.g. InfiniteStamina header) | **`BoolPlayerVariable`** |
+
+Interpretation:
+
+- The hooked base is **not** “a raw float array.” It is a **typed C++ layout**.
+- **Front of object** reports **`StringPlayerVariable`** (first subobject / leading type).
+- Cheat floats are **embedded `FloatPlayerVariable`** objects (vptr + actual + base twin + tail).
+- Matches host/PDB hierarchy: **`PlayerVariables`** dataset composed of String / Float / Bool / Health variable types. See [player-vars-array.md](player-vars-array.md), [host-notes-extract.md](host-notes-extract.md).
+
+### Shared type vtables (module-relative, this build)
+
+| Type | vtable ≈ `gamedll+RVA` | Role |
+|------|------------------------|------|
+| `FloatPlayerVariable` | **`+0x26FE9C0`** | Per float slot header |
+| Outer / string-leading object | **`+0x2758428`** | At engine `this+0` |
+| `BoolPlayerVariable` | **`+0x2758448`** | Flag-style slots |
+
+RVAs need re-check after gamedll update; resolve as `getAddress("gamedll_ph_x64_rwdi.dll")+RVA`.
+
+### Type **name strings** in `gamedll` (AOB, few hits)
+
+| String | ~Hits | Notes |
+|--------|-------|--------|
+| `FloatPlayerVariable` | 2 | RTTI / type info cluster |
+| `BoolPlayerVariable` | 2 | same |
+| `StringPlayerVariable` | 2 | same |
+| `PlayerVariables` | 3 | container-level name (+ other refs) |
+
+Example addresses that attach (`gamedll=7FFA1FE20000`):  
+`FloatPlayerVariable` @ `7FFA230A1706`, `7FFA2314E304`;  
+`PlayerVariables` @ `7FFA223230B8`, `7FFA2252D137`, `7FFA226690F6`.
+
+**Do not** spam full-process string AOBs in a loop; these four names were enough to prove binary identity. Prefer module-limited scans or xrefs from these addresses.
+
+### Naming: `PlayerVariables` vs RTTI pieces
+
+| Name | Use |
+|------|-----|
+| **`PlayerVariables`** | **Canonical** name for the live aggregate we attach the table to (dataset / host notes / gamedll string). **Symbol for new work.** |
+| **`StringPlayerVariable`** | RTTI at **engine `this+0`** (leading subobject type) — not a reason to rename the whole blob |
+| **`FloatPlayerVariable` / `BoolPlayerVariable`** | RTTI of **individual slots** inside the aggregate |
+| **`playerStat`** | **Legacy CT only** — same as catalog base of `PlayerVariables` |
+
+### Accuracy ladder (preferred discovery)
+
+| Rank | Method | Status (2026-08-01) |
+|------|--------|---------------------|
+| **1** | **Typed pointer chain** `PlayerState* → +0xBA8 → PlayerVariables this` (via static global or DI getter) | **Proved — preferred** |
+| 2 | **`PlayerDI_PH` vtable +0x618** getter (returns same pointer) | **Proved** |
+| 3 | Field access log / inject on consumers | Works; interim |
+| 4 | GroupScan / interior data AOB | Research only |
+
+---
+
+## Most accurate / safe detection (proved 2026-08-01)
+
+### Proven chain
+
+```text
+gamedll global  (RVA +0x36015C8 this build)
+    →  pointer to PlayerState
+PlayerState + 0xBA8
+    →  PlayerVariables engine this
+PlayerVariables catalog base
+    →  engine this + 8
+```
+
+**Live check (same attach):**
+
+| Step | Result |
+|------|--------|
+| Global `gamedll+0x36015C8` | → `211C3654E80` |
+| RTTI of that pointer | **`PlayerState`** |
+| `[PlayerState + 0xBA8]` | → `211C729B010` |
+| RTTI @ that address | **`StringPlayerVariable`** (outer) |
+| HoldJump `[this+0x2F90]` | 9.0 (edited); matches known field |
+| Catalog base | `211C729B018` |
+
+**Note:** Host notes mentioned **`PlayerState + 0xE8`** on older builds. On **this** build the live link is **`+0xBA8`**, not `+0xE8`. Always re-validate the offset after patches.
+
+### How game code gets the same pointer (`PlayerDI_PH`)
+
+`PlayerDI_PH` **vtable +0x618** (gamedll **RVA `+0xF74940`** this build):
+
+```text
+; RCX = PlayerDI_PH*
+cmp  byte ptr [rcx+0x3790], 0
+mov  rax, [gamedll_global]      ; PlayerState* (same global as above)
+jne  use_rax                    ; if flag != 0, keep global
+mov  rax, [rcx+0x6B0]           ; else alternate mid pointer
+use_rax:
+mov  rax, [rax+0xBA8]           ; → PlayerVariables engine this
+ret
+```
+
+When `flag@DI+0x3790 != 0` (observed **1**): path is **global PlayerState* → +0xBA8**.  
+`[DI+0x6B0]` was **0** on that attach (unused branch).
+
+Callers (e.g. HoldJump `mulss`) do `call [rax+0x618]` with **RCX = PlayerDI_PH**, then use returned RAX as vars `this`.
+
+### Recommended bootstrap (safe order)
+
+**A. Preferred — static global + offset (no inject, no jump, no scan)**
+
+```text
+1. mb = getAddress("gamedll_ph_x64_rwdi.dll")
+2. Resolve global slot:
+   - Prefer: AOB the getter (below) and read its RIP-relative [rip+disp] target
+   - Or this-build RVA: readQword(mb + 0x36015C8)   // re-AOB after patch
+3. ps = readQword(global)                 // PlayerState*
+4. assert getRTTIClassName(ps) ~ PlayerState (optional)
+5. eng = readQword(ps + 0xBA8)            // PlayerVariables engine this
+6. assert getRTTIClassName(eng) ~ StringPlayerVariable (optional)
+7. sanity: readFloat(eng + 0x2F90) finite / known HoldJump-ish
+8. registerSymbol("PlayerVariables", eng + 8)   // catalog base for map offsets
+   // or register engine this if rows use engine offsets
+```
+
+**B. Unique code AOB on the getter (finds global after update)**
+
+Module scan for function bytes (this build):
+
+```text
+80 B9 90 37 00 00 00    cmp byte ptr [rcx+0x3790],0
+48 8B 05 ?? ?? ?? ??    mov rax,[rip+rel]     ; wildcard RIP
+75 07                   jne +7
+48 8B 81 B0 06 00 00    mov rax,[rcx+0x6B0]
+48 8B 80 A8 0B 00 00    mov rax,[rax+0xBA8]
+C3                      ret
+```
+
+- `aobscanmodule` → should be unique or rare.  
+- Parse `mov rax,[rip+rel]` → **global address** (ASLR-safe).  
+- Then same steps 3–8.  
+- **No code cave required** for detection; inject only if you want to log calls.
+
+**C. Interim — consumer inject** (HoldJump path, capture RAX after vcall)
+
+Only if A/B fail after a patch. See older sections below.
+
+### Sanity checks (do these; cheap)
+
+| Check | Pass |
+|-------|------|
+| Mid RTTI | `PlayerState` |
+| Eng RTTI | `StringPlayerVariable` (or still plausible vars head) |
+| Float slot RTTI | `FloatPlayerVariable` at e.g. eng+0x2F88 header |
+| Field sample | HoldJump / MaxStamina sensible |
+| Two instances | Optional second blob exists; chain above is **live** path when flag uses global |
+
+### Safety
+
+| Do | Don't |
+|----|--------|
+| `aobscanmodule` on short getter | Full-process spam string AOB |
+| `readQword` chain + RTTI pcall | `createMemScan` in remote `runScriptSafe` |
+| Re-validate `+0xBA8` / global RVA after patch | Assume host `+0xE8` still valid |
+| One light sanity float read | GroupScan as enable |
+
+### Symbol / table migration
+
+```text
+registerSymbol("PlayerVariables", catalogBase)   // eng+8 for 20260801 map offsets
+// Value rows: PlayerVariables+2F88  (or [holder]+off if pointer storage)
+// Legacy: playerStat → same address; rename when convenient
+```
+
+---
+
+## Table status audit (2026-08-01) — offsets, comments, bad values
+
+### What was and was not done
+
+| Change | Status |
+|--------|--------|
+| Bootstrap = **PlayerState+0xBA8** chain (no data AOB) | Script on enable AA updated |
+| Symbol **`PlayerVariables`** (+ legacy `playerStat` alias on enable) | Yes |
+| Rename Address EXPR **`playerStat` → `PlayerVariables`** | **Yes** (~100 rows) |
+| Remap offsets to **FloatPlayerVariable 20260801** catalog | **Partial** — bulk name-match earlier (~40–50 rows); **not** a full verified pass |
+| Update **Description comments** (old hex like `- 1080`, `- 2E38`) | **No — still stale** |
+| Value types (byte vs float) vs catalog | **Not systematically fixed** |
+
+### Why `InvisibleToEnemies` can show **192**
+
+Not proof the **PlayerVariables base** is wrong (HoldJump / MaxStamina chain checks were coherent). More often:
+
+1. **Stale offset** — row still at old CT offset (e.g. description says `1080`) while catalog moved; Address may still be `PlayerVariables+1080` if that row was **skipped** by name-match remap.  
+2. **Wrong type** — flag is **`BoolPlayerVariable`** (byte); CE row as **4-byte float/int** reads neighboring payload → garbage like **192** (`0xC0`, often low byte of a float/vptr pattern).  
+3. **Comment vs Address** — description still shows old defaults/offsets; ignore comments until rewritten from the map.
+
+**Detection chain is still the preferred locator.** Bad single-row values ⇒ fix **that row’s offset + type** from **`FloatPlayerVariable 20260801`**, not abandon `PlayerState+0xBA8`.
+
+### Required cleanup (when CE is healthy)
+
+1. For each value row under the enable cheat: resolve name → **map offset**; set Address `PlayerVariables+<hex>`.  
+2. Set **type** from slot kind (float vs byte/bool).  
+3. Rewrite **Description** trailing hex to the **20260801** offset (or drop hex from comments).  
+4. Spot-check: InvisibleToEnemies, InfiniteStamina, HoldJump, MaxStamina, Buy/Sell factors.
+
+Until that pass: treat table as **partially ported**; do not trust every displayed value.
+
+---
+
+## Remote pipe / “server crash” notes (ops)
+
+See **`skills/ce-remote-scanning`** — default model: **agent kills the server; reload restores it.**
+
+| Symptom | Likely cause |
+|---------|----------------|
+| Server fine after user reload of `ce_server.lua` | Expected — stays up until broken |
+| Relay: `Failed to connect to pipe` after earlier success | **Agent/command killed or hung** the Lua pipe thread — not “unavailable on restart” |
+| CE: `EXEC done ok` + disconnect + new pipe | **Normal** session end — not a crash |
+| CE: `EXEC start` without `done` | **That command** killed/hung the server |
+| Connect fail until user reloads again | Server still dead/stuck — reload; fix the bad call, don’t spam reconnect |
+
+**Health check:** one `ping` → `pong`. No pong ⇒ server is down (usually because we killed it).
+
+---
+
+## Next steps (remaining)
+
+| Priority | Work |
+|----------|------|
+| **Done** | Name **`PlayerVariables`**; chain **PlayerState+0xBA8**; **PlayerDI_PH** vfunc **+0x618** |
+| 1 | Wire CT bootstrap AA/Lua to chain **A** or **B** (drop data AOB / GroupScan enable) |
+| 2 | After patch: re-AOB getter → new global; confirm **+0xBA8** |
+| 3 | Optional: engine `GetLocalPlayer*` → `PlayerDI_PH` for full root (weather-style) |
+| 4 | Rename table EXPRs `playerStat` → `PlayerVariables` when editing CT |
+
+---
+
+## Discovering the live base: “Find what accesses” (research path)
 
 Once **any** field address is known (e.g. HoldJumpHeight after a GroupScan or a freeze test), use CE’s **access log** (not a freezing code BP) to recover the **object pointer the game uses**.
 

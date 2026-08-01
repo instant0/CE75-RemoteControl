@@ -80,20 +80,18 @@ class PipeConn:
     def __init__(self, pipename):
         self.pipename = pipename
         self.handle = INVALID_HANDLE_VALUE
+        self.last_error = None
         self._close_lock = threading.Lock()
 
-    def connect(self, retries=10, delay=1.0):
-        for attempt in range(1, retries + 1):
-            self.handle = kernel32.CreateFileW(
-                self.pipename, GENERIC_READ | GENERIC_WRITE, 0,
-                None, OPEN_EXISTING, 0, None
-            )
-            if self.handle != INVALID_HANDLE_VALUE:
-                return True
-            err = ctypes.get_last_error()
-            if attempt < retries:
-                import time
-                time.sleep(delay)
+    def connect(self):
+        """Single-shot open. No retries: pipe ready or something is broken."""
+        self.handle = kernel32.CreateFileW(
+            self.pipename, GENERIC_READ | GENERIC_WRITE, 0,
+            None, OPEN_EXISTING, 0, None
+        )
+        if self.handle != INVALID_HANDLE_VALUE:
+            return True
+        self.last_error = ctypes.get_last_error()
         return False
 
     def read_exact(self, size):
@@ -135,7 +133,8 @@ def relay(tcp_conn, pipename):
     print(f"[relay] New connection from {tcp_conn.getpeername()}", flush=True)
     pipe = PipeConn(pipename)
     if not pipe.connect():
-        print(f"[relay] Failed to connect to pipe '{pipename}'", flush=True)
+        err = getattr(pipe, "last_error", None)
+        print(f"[relay] Failed to connect to pipe '{pipename}' (GetLastError={err})", flush=True)
         try:
             tcp_conn.sendall(b"ERROR: Cannot connect to CE pipe\n")
         except OSError:
