@@ -164,7 +164,8 @@ Validating fields on a new game build needs a live base address from a healthy m
 
 ## Related
 
-- Tasks: `docs/tasks/T01-*.md` … `T06-RESULTS.md`, `docs/tasks/ISSUES-AND-NONGOALS.md`
-- Spike: `docs/tasks/T00-RESULTS.md`
+- Risks / non-goals: `docs/NONGOALS-AND-HAZARDS.md`
+- Playbook: `skills/ce-table-migrate`
+- Command ref: `docs/TABLE-MIGRATE.md`
 - Scanning: `skills/ce-remote-scanning`
 

@@ -1,4 +1,17 @@
+# Local / host-only — never public GitHub
 helper/
-skills/
-docs/game/
-__pycache
+logs/
+__pycache__/
+*.pyc
+
+# Full trainer tables and bulk dumps (extract facts into docs/game/* instead)
+*.CT
+*.ct
+*.CETRAINER
+
+# If someone drops offline host copies into the tree, keep them out of git
+docs/game/**/raw/
+**/private/
+
+# Optional local session artifacts
+logs/

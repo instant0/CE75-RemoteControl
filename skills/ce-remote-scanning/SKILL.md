@@ -7,6 +7,11 @@ description: Memory scanning and value searching techniques using Cheat Engine's
 
 Use this skill when you need to scan memory, find values, or search for patterns in a game process via the CE remote.
 
+## Game research vs this skill
+
+**This skill** = how to use remote CE safely (any game).  
+**Per-game knowledge** (offsets, catalogs, scraps) = `docs/game/<Title>/` only — **not** under `skills/game/`.
+
 ## Connection
 
 ```python
@@ -135,7 +140,7 @@ runScript local r=AOBScan("12 BC 00 00"); return r and r.Count or 0
 
 **Full methodology:** **`skills/ce-aob-scan`** (harvest → scan → multi-hit rank → zero-hit recovery → verify → `alSetDesc`).
 
-This file stays focused on **safe remote APIs** and value scanning. Do not fork per-game AOB skills; put game anchors under `skills/game/<Title>/`.
+This file stays focused on **safe remote APIs** and value scanning. Do not fork per-game AOB skills; put game anchors under `docs/game/<Title>/`.
 
 ## Value Scanning Strategy
 

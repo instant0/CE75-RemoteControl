@@ -434,12 +434,18 @@ def main():
                         help="Relay TCP port (default: 8888)")
     parser.add_argument("--timeout", type=float, default=30,
                         help="Default socket timeout seconds (default: 30; use 120 for Active/AOB)")
+    parser.add_argument(
+        "--session-log",
+        default=None,
+        metavar="PATH",
+        help="Append REQ/RSP/ERR log (or env CE_SESSION_LOG=1|/path)",
+    )
     parser.add_argument("--cmd", help="Single command to execute")
     parser.add_argument("-i", "--interactive", action="store_true",
                         help="Interactive shell mode")
     args = parser.parse_args()
 
-    ce = CERemote(args.host, args.port, args.timeout)
+    ce = CERemote(args.host, args.port, args.timeout, session_log=args.session_log)
 
     if args.cmd:
         result = ce.cmd(args.cmd)

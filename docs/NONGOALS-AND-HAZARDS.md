@@ -1,6 +1,7 @@
-# Shared issues, non-goals, and crash catalogue
+# Non-goals, remote limits, and crash catalogue
 
-This document is the **common attachment** for all `Txx` tasks. Task files refer here instead of duplicating full risk tables.
+Product constraints and CE hazards for remote table work.  
+(Completed implementer task checklists were removed — the server works; keep lasting risks here.)
 
 ## Product non-goals (all tasks)
 

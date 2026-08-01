@@ -5,7 +5,7 @@ Port a **loaded** Cheat Engine 7.5 cheat table to a new game build over the UESc
 Server: `ce_server.lua` (**v1.7+** recommended: seed + safe rename).  
 Client: `client.py` helpers (`CERemote`).  
 Playbook skill: `skills/ce-table-migrate/SKILL.md`.  
-Implementer tasks: `docs/tasks/`.
+Risks / non-goals: `docs/NONGOALS-AND-HAZARDS.md`.
 
 ## Goal
 
@@ -237,7 +237,7 @@ ce.st_clone("Big", "Big_v2", timeout=120)
 - Prefer module AOBs (`gamedll_…`) from scripts over full-process wild scans when porting injects.
 - Some structures are **huge** (20k+ elements); do not mass-clone them casually.
 
-Game-specific skill: `skills/game/DyingLight2/player-variables/SKILL.md`.
+Game knowledge (DL2): `docs/game/DyingLight2/` (start at `INDEX.md`).
 
 ## Client helper map
 
@@ -253,9 +253,9 @@ Game-specific skill: `skills/game/DyingLight2/player-variables/SKILL.md`.
 
 ## Related
 
-- `docs/tasks/` — T00–T11 task docs and RESULTS  
-- `docs/tasks/ISSUES-AND-NONGOALS.md` — shared risks  
+- `docs/NONGOALS-AND-HAZARDS.md` — product non-goals + crash catalogue  
 - `skills/ce-table-remote/SKILL.md` — foundation  
 - `skills/ce-table-migrate/SKILL.md` — agent playbook  
 - `README.md` — full command list + dangerous APIs  
 - `docs/CE75-INTEGRATION.md` — CE75 UE helpers vs raw al/st  
+- `docs/game/DyingLight2/` — extracted game knowledge (not skills)  

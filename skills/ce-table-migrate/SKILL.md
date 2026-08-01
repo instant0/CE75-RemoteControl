@@ -194,9 +194,9 @@ Details and wire formats: **`docs/TABLE-MIGRATE.md`**.
 
 ## Related
 
-- Tasks: `docs/tasks/T00`–`T09`, `ISSUES-AND-NONGOALS.md`  
-- Spike: `docs/tasks/T00-RESULTS.md`  
+- Risks / non-goals: `docs/NONGOALS-AND-HAZARDS.md`  
 - Foundation skill: `ce-table-remote`  
 - AOB (any game): `ce-aob-scan`  
-- DL2 index / API catalog: `game/DyingLight2/`  
+- Full command ref: `docs/TABLE-MIGRATE.md`  
+- Per-game knowledge: `docs/game/<Title>/` (e.g. Dying Light 2)  
 
