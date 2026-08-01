@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T00 |
-| **Status** | TODO |
+| **Status** | DONE (see T00-RESULTS.md) |
 | **Phase** | 0 — Spike |
 | **Parent** | — (root) |
 | **Children** | T01, T10 (optional) |
