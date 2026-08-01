@@ -79,6 +79,14 @@ PlayerDI_PH
 - **InventoryItem +0x10** = stack count (coins-as-item, trophies, craft mats) — used in crafting UI; **different** from InventoryMoney+0x38 cash pool.
 - Tooltip/shop CEA (1.14): cost/compare AOBs on shop controller — **costs**, not wallet balance.
 
+### Vendor resource currencies (re-confirmed 2026-08-02)
+
+Vendor UI shows **cash** plus several **resource** amounts (e.g. 0, 1506, 1146, 1203, 82283) used to buy/upgrade. Those resources are **inventory stacks**, not `InventoryMoney+0x38`.
+
+- **Field:** still **`+0x10`** on the stack object (access log: many `mov`/`cmp`/`add` with **`[reg+10]`**; upgrade path included).
+- **How to find a live stack:** distinctive dword (high unique count) → spend → next scan decreased-by-N → one address → what-accesses. Do **not** full-process AOB common small counts.
+- Live graph / RVAs: `private/DyingLight2/structures/INVENTORY-GRAPH-LIVE.md`.
+
 ### Access-log filters (money)
 
 When “find what accesses” on cash (4-byte):
