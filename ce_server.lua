@@ -1,6 +1,6 @@
 local PIPE_NAME = "UEScanRemote"
 local PIPE_BUFFER = 65536
-local VERSION = "ce-server v1.8.1 (CE 7.5 qol+readfix)"
+local VERSION = "ce-server v1.8.2 (CE 7.5 qol+exec-log)"
 local MAX_RESP = 48000
 local MAX_OFFSETS = 512
 local MAX_SCRIPT_BYTES = 262144  -- 256 KiB staging cap
@@ -753,6 +753,24 @@ local function audit_push(verb, detail, result)
   while #a > MAX_AUDIT do
     table.remove(a, 1)
   end
+end
+
+-- Preview of inbound command for CE Lua Engine console (crash forensics).
+-- Last printed "EXEC start" before silence = the call that killed the server thread.
+local function cmd_preview(cmd, max_len)
+  max_len = max_len or 240
+  local s = scrub(tostring(cmd or ""))
+  -- Collapse huge hex payloads (script chunks, alApply) so console stays readable
+  if #s > 80 and (s:find("hex=") or s:match("^alSetScriptChunk") or s:match("^runScript")) then
+    local verb = s:match("^(%S+)") or "?"
+    local rest = s:sub(#verb + 2)
+    if #rest > 60 then rest = rest:sub(1, 60) .. "…[trunc]" end
+    s = verb .. " " .. rest
+  end
+  if #s > max_len then
+    s = s:sub(1, max_len) .. "…[len=" .. tostring(#tostring(cmd or "")) .. "]"
+  end
+  return s
 end
 
 -- Main-thread only: single alSet* op for alApply / shared handlers
@@ -1875,21 +1893,55 @@ else
         _G._server_error = nil
         pipe.acceptConnection()
         print("[server] Client connected!")
+        local seq = 0
         while pipe.connected and not t.Terminated do
           local cmd = read_length_prefixed(pipe)
           if not cmd then
             print("[server] Client disconnected (read returned nil)")
             break
           end
-          -- Log verb only (never full AA scripts / script bodies)
+          seq = seq + 1
           local verb = cmd:match("^(%S+)") or cmd
-          print("[server] Received: " .. verb)
-          local ok, resp = pcall(process_command, cmd)
-          local out = ok and resp or ("ERROR: " .. tostring(resp))
+          local preview = cmd_preview(cmd, 240)
+          -- Print BEFORE executing. If the Lua thread dies mid-handler, the last
+          -- console line is this EXEC start (not just the verb).
+          print(string.format("[server] EXEC start #%d %s | %s", seq, verb, preview))
+          local t0 = 0
           pcall(function()
-            audit_push(verb, "", tostring(out):match("^(.-)[\r\n]") or tostring(out):sub(1, 80))
+            if type(getTickCount) == "function" then t0 = getTickCount() end
           end)
-          write_length_prefixed(pipe, out)
+          local ok, resp = pcall(process_command, cmd)
+          local t1 = t0
+          pcall(function()
+            if type(getTickCount) == "function" then t1 = getTickCount() end
+          end)
+          local ms = (t1 and t0) and (t1 - t0) or -1
+          local out
+          if ok then
+            out = resp
+            local out_preview = scrub(tostring(out or "")):gsub("[\r\n]+", " ")
+            if #out_preview > 100 then out_preview = out_preview:sub(1, 100) .. "…" end
+            print(string.format(
+              "[server] EXEC done  #%d ok ms=%s out=%s",
+              seq, tostring(ms), out_preview))
+          else
+            out = "ERROR: " .. tostring(resp)
+            -- pcall caught a Lua error — server thread should survive
+            print(string.format(
+              "[server] EXEC fail  #%d ms=%s err=%s",
+              seq, tostring(ms), scrub(tostring(resp)):sub(1, 200)))
+          end
+          pcall(function()
+            audit_push(
+              verb,
+              preview:sub(1, 120),
+              tostring(out):match("^(.-)[\r\n]") or tostring(out):sub(1, 80))
+          end)
+          local wok, werr = pcall(write_length_prefixed, pipe, out)
+          if not wok then
+            print("[server] WRITE fail #" .. tostring(seq) .. " " .. scrub(tostring(werr)))
+            break
+          end
           if cmd == "close" then break end
         end
         print("[server] Destroying pipe...")

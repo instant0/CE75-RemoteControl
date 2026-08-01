@@ -95,8 +95,17 @@ If you rename the description, update that string inside the AA script in the sa
 
 CT may contain large dumps (`PlayerState`, `FloatPlayerVariable 1.xx` with **tens of thousands** of elements). Prefer validating a few named offsets over cloning entire mega-structs unless necessary.
 
+**Regenerating the name/offset map** (definition site, not live blob): see **`../PLAYER-VARS-ARRAY.md`** (historical Lua generator + 1.14 AOB still hits `AnimGraph_BankName`).
+
+**Current HP / money amount** are mostly **not** in this blob — see **`../CHARACTER-HEALTH-MONEY.md`** (`LifeHealth+0x1C`, `InventoryMoney+0x38`). Config **MaxHealth** is `playerStat + 0x3438` once bootstrap works.
+
 ## Related
 
 - Spike notes: `docs/tasks/T00-RESULTS.md`
 - CE remote foundation: `skills/ce-table-remote`
+- **AOB method (any entry):** `skills/ce-aob-scan`
 - Remote scanning safety: `skills/ce-remote-scanning`
+- DL2 modules + API catalog: `game/DyingLight2/MODULES.md`, `FUNCTION-CATALOG.md`
+- PlayerVarsArray generator: `game/DyingLight2/PLAYER-VARS-ARRAY.md`
+- HP & money: `game/DyingLight2/CHARACTER-HEALTH-MONEY.md`
+- Time / weather feature: `game/DyingLight2/time-weather`

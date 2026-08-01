@@ -33,6 +33,50 @@ These are exposed as server commands and are safe from background threads:
 | `enumModules` | List loaded modules |
 | `getAddress <name>` | Resolve symbol/module+offset |
 
+## Breakpoints vs “find what accesses” (do not confuse)
+
+Cheat Engine has **different** mechanisms. Agents often wrongly assume any “breakpoint” freezes the process and that a hung remote server is “because the game is stopped.” That is often **false**.
+
+| Mechanism | UI / concept | Stops the process? | What you get |
+|-----------|--------------|--------------------|--------------|
+| **Value / access logging** | “**Find out what accesses this address**” / “Show which code reads or writes to this value” (CE **value breakpoints** / page-guard style access tracing) | **No** — hit is **logged** and execution **continues** | Code addresses that touched the value; optional register snapshot in the log, process keeps running |
+| **Software / hardware breakpoint** | Debugger BP on instruction or DR0–DR3 data BP configured to **break** | **Yes** (unless you script continue) | Full stop; registers valid for that pause; step / continue needed |
+| **Conditional BP (scripted)** | e.g. break only when `RDI == 0x3F` | Stops **only** when condition matches; otherwise continues | Same as stop BP when it hits |
+
+**Implications for remote CE work:**
+
+1. **User “put a breakpoint on the time function” via value-access find** → game is **still running**. Do **not** blame remote timeouts on “process frozen.”
+2. **True stop BPs** are a different tool; only those make “continue first” or “registers only valid while paused” advice correct.
+3. Register dumps the user pastes from an **access log** may be from a **past hit** while the process moved on — heap pointers can be stale by the time we `readQword`.
+4. Remote Lua **does not** currently expose a full debugger UI. Do not assume `debug_setBreakpoint` / `debugger_onBreakpoint` from the pipe without an explicit design (see `SOLUTION.md` for stop-BP architecture; not the default scanning path).
+
+**When the remote server hangs:** prefer “bad/heavy CE API,” wrong-thread call, or **Lua server thread death** mid-handler — **not** “value BP stopped CE.” CE itself often keeps running; only the pipe server dies.
+
+### Diagnosing a dead server (what killed it?)
+
+The relay used to log only the **verb** (`Received: getAddress`). If the handler hard-crashed CE’s Lua thread, the CE console showed nothing useful.
+
+**CE Lua Engine (server ≥ v1.8.2):**
+
+```text
+[server] EXEC start #N <verb> | <preview of full command>
+[server] EXEC done  #N ok ms=… out=…
+```
+
+If the thread dies, **the last line is usually `EXEC start`** for the bad call — no matching `EXEC done`.
+
+**Client session log (optional):**
+
+```bash
+export CE_SESSION_LOG=1   # → remote/logs/ce-session.log
+# or: export CE_SESSION_LOG=/tmp/ce-session.log
+python3 client.py --cmd "ping"
+```
+
+Each line: `timestamp  #seq  REQ|RSP|ERR  payload`. Last `REQ` without `RSP` = what the client sent when the server died.
+
+Hard crashes that kill the thread **bypass** `pcall` (native CE fault) — logging before execute is the forensic hook, not “catching” the crash.
+
 ## Dangerous APIs (AVOID)
 
 These crash the CE relay or hang the server when called via `runScript`:
@@ -85,6 +129,13 @@ runScript local r=AOBScan("12 BC 00 00"); return r and r.Count or 0
 - AOBScan on small values (< 65536) returns thousands of hits
 - AOBScan range parameters (start, stop) are **ignored** in some CE versions
 - AOBScan on writable memory with `AOBScan(pattern, "w")` may crash
+- CT comments that say “should be unique” are **often wrong** after patches — plan for multi-hit ranking
+
+## Code / table AOB (any entry)
+
+**Full methodology:** **`skills/ce-aob-scan`** (harvest → scan → multi-hit rank → zero-hit recovery → verify → `alSetDesc`).
+
+This file stays focused on **safe remote APIs** and value scanning. Do not fork per-game AOB skills; put game anchors under `skills/game/<Title>/`.
 
 ## Value Scanning Strategy
 

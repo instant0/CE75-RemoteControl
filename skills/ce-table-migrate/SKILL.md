@@ -10,6 +10,7 @@ Use when the user has an **old working `.CT` loaded** in CE 7.5, attached to a *
 
 Full command reference: `docs/TABLE-MIGRATE.md`.  
 Foundation (sync rules, seed/rename): `skills/ce-table-remote/SKILL.md`.  
+**AOB retune (any entry):** `skills/ce-aob-scan/SKILL.md`.  
 UE layout finding: `ue-character-finding`, `ue-stats-attributes`, `ue-inventory-hacking`, `ce-remote-scanning`.
 
 ## When to use
@@ -72,14 +73,18 @@ Build tiers from **CLASS** (and HASSCRIPT):
 2. `text = ce.al_get_script(id)`  
 3. Update AOB / module name for the new build (prefer patterns from the script’s own comments / `aobscanmodule`).  
 4. Optional: native `ce.aob_scan(pattern, timeout=120)` to validate hits **before** enable.  
+   - **Multi-hit:** rank by ORIGINAL CODE disasm + nearby **named** APIs / strings — not first hit.  
+   - **0 hits:** fall back to named exports / debug strings (see `ce-remote-scanning` → Code-inject AOB).  
 5. `ce.al_set_script(id, text)` → `ce.aa_check(id)`  
 6. `ce.al_set_active(id, True, timeout=120)` — **one** script; server also aaChecks AA rows unless `nocheck=True`  
 7. `ce.get_address("symbol")` / `ce.al_resolve(dependent_id)` / `ce.sym_get("playerStat")`  
 8. Only then enable next inject script  
+9. **After verify:** `ce.al_set_desc(id, "[Cheat][<ver>] …")` so MEMORY shows the version you confirmed (user’s version scheme).  
 
 **Prefer:** `aaCheck` before every enable.  
 **Never:** mass-enable many AA rows.  
-**If modal appears in CE:** user must dismiss; otherwise `synchronize` deadlocks the pipe.
+**If modal appears in CE:** user must dismiss; otherwise `synchronize` deadlocks the pipe.  
+**Stale labels:** ORIGINAL CODE function names from old CE sessions can be wrong — keep the **bytes**.
 
 Soft disable without running [Disable]: `ce.al_disable_soft(id)`.
 
@@ -192,4 +197,6 @@ Details and wire formats: **`docs/TABLE-MIGRATE.md`**.
 - Tasks: `docs/tasks/T00`–`T09`, `ISSUES-AND-NONGOALS.md`  
 - Spike: `docs/tasks/T00-RESULTS.md`  
 - Foundation skill: `ce-table-remote`  
-- DL2 bootstrap: `game/DyingLight2/player-variables`  
+- AOB (any game): `ce-aob-scan`  
+- DL2 index / API catalog: `game/DyingLight2/`  
+

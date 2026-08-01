@@ -55,30 +55,90 @@ def _hex_decode(h: str) -> bytes:
     return bytes.fromhex(h)
 
 
+def _default_session_log_path() -> Optional[str]:
+    """CE_SESSION_LOG=1 → logs/ce-session.log; CE_SESSION_LOG=/path → that file; unset → off."""
+    import os
+    from pathlib import Path
+
+    v = os.environ.get("CE_SESSION_LOG", "").strip()
+    if not v:
+        return None
+    if v in ("1", "true", "yes", "on"):
+        root = Path(__file__).resolve().parent
+        log_dir = root / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return str(log_dir / "ce-session.log")
+    return v
+
+
 class CERemote:
-    def __init__(self, host: str = "localhost", port: int = 8888, timeout: float = 30):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 8888,
+        timeout: float = 30,
+        session_log: Optional[str] = None,
+    ):
         self.host = host
         self.port = port
         self.timeout = timeout
+        # Explicit path wins; else env CE_SESSION_LOG
+        self.session_log = session_log if session_log is not None else _default_session_log_path()
+        self._seq = 0
+
+    def _log_session(self, phase: str, text: str) -> None:
+        path = self.session_log
+        if not path:
+            return
+        import os
+        from datetime import datetime, timezone
+
+        try:
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            # One line; collapse newlines in payload for greppability
+            flat = (text or "").replace("\r", "\\r").replace("\n", "\\n")
+            if len(flat) > 4000:
+                flat = flat[:4000] + f"…[len={len(text or '')}]"
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"{ts}\t#{self._seq}\t{phase}\t{flat}\n")
+        except Exception:
+            pass  # never break CE ops because of logging
 
     def cmd(self, command: str, timeout: Optional[float] = None) -> Optional[str]:
-        """Send one length-prefixed command; optional per-call timeout (seconds)."""
+        """Send one length-prefixed command; optional per-call timeout (seconds).
+
+        If session_log is set (ctor or CE_SESSION_LOG env), appends each
+        request/response (and errors/timeouts) so a dead server can be blamed
+        on the last REQ without CE console access.
+        """
         t = self.timeout if timeout is None else timeout
-        with socket.create_connection((self.host, self.port), t) as s:
-            s.settimeout(t)
-            data = command.encode("utf-8")
-            s.sendall(struct.pack("<I", len(data)) + data)
-            header = s.recv(4)
-            if len(header) < 4:
-                return None
-            length = struct.unpack("<I", header)[0]
-            response = b""
-            while len(response) < length:
-                chunk = s.recv(length - len(response))
-                if not chunk:
-                    break
-                response += chunk
-            return response.decode("utf-8", errors="replace")
+        self._seq += 1
+        self._log_session("REQ", command)
+        try:
+            with socket.create_connection((self.host, self.port), t) as s:
+                s.settimeout(t)
+                data = command.encode("utf-8")
+                s.sendall(struct.pack("<I", len(data)) + data)
+                header = s.recv(4)
+                if len(header) < 4:
+                    self._log_session("ERR", "short/empty response header (server died mid-handler?)")
+                    return None
+                length = struct.unpack("<I", header)[0]
+                response = b""
+                while len(response) < length:
+                    chunk = s.recv(length - len(response))
+                    if not chunk:
+                        break
+                    response += chunk
+                out = response.decode("utf-8", errors="replace")
+                self._log_session("RSP", out)
+                return out
+        except Exception as e:
+            self._log_session("ERR", f"{type(e).__name__}: {e}")
+            raise
 
     # --- foundation ---
 
