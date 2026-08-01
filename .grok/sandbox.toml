@@ -1,0 +1,22 @@
+# Kernel FS scope for this project (use: grok --sandbox dl2-scope
+# or [sandbox] profile in .grok/config.toml).
+#
+# ALLOWED:
+#   - project CWD + subfolders (this repo) — via extends = strict
+#   - /tmp (temp) — via strict defaults
+#   - /mnt/r — CT, DLLs, host scripts (read+write)
+#   - /mnt/y/Lazarus/Projects/cheat-engine-7.5/Cheat Engine — CE 7.5 source (read)
+#
+# EVERYTHING ELSE: off limits unless the user explicitly grants a path.
+# Do not scan /home, ~, or other trees.
+
+[profiles.dl2-scope]
+extends = "strict"
+# CE source (docs: README.md, CE-GROUP-SCAN.md, NONGOALS-AND-HAZARDS.md)
+read_only = [
+  "/mnt/y/Lazarus/Projects/cheat-engine-7.5/Cheat Engine",
+]
+# Game/table host files
+read_write = [
+  "/mnt/r",
+]
