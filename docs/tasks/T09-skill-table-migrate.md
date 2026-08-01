@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T09 |
-| **Status** | TODO |
+| **Status** | DONE |
 | **Phase** | 3 — Agent surface |
 | **Parent** | T07, T08 (helpers + docs) |
 | **Children** | — |
@@ -60,11 +60,11 @@ description: Port a loaded Cheat Engine address list and dissect structures to a
 
 ## Acceptance criteria
 
-- [ ] Skill file exists with description usable for skill discovery.
-- [ ] Dependency order AA → pointers → structs is explicit.
-- [ ] Crash-avoidance section present.
-- [ ] Won’t-work / handoff section present.
-- [ ] README skills table lists `ce-table-migrate` (if T08 didn’t already).
+- [x] Skill file exists with description usable for skill discovery.
+- [x] Dependency order AA → pointers → structs is explicit.
+- [x] Crash-avoidance section present.
+- [x] Won’t-work / handoff section present.
+- [x] README skills table lists `ce-table-migrate` (if T08 didn’t already).
 
 ## Out of scope
 

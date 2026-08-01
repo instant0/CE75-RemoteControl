@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T05 |
-| **Status** | TODO |
+| **Status** | DONE (see T05-RESULTS.md) |
 | **Phase** | 2 — Dissect structures read path |
 | **Parent** | T01 |
 | **Children** | T06 |
@@ -82,11 +82,11 @@ end
 
 ## Acceptance criteria
 
-- [ ] `stDump` lists all ~15–20 structures under size cap.
-- [ ] `stFind` / `stGet` by exact name.
-- [ ] No code path calls `getStructure(nameString)`.
-- [ ] Missing name → NOT_FOUND; server remains healthy.
-- [ ] help updated.
+- [x] `stDump` lists all ~15–20 structures under size cap.
+- [x] `stFind` / `stGet` by exact name.
+- [x] No code path calls `getStructure(nameString)`.
+- [x] Missing name → NOT_FOUND; server remains healthy.
+- [x] help updated.
 
 ## Out of scope
 

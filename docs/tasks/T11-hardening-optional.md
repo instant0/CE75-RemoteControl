@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T11 |
-| **Status** | TODO |
+| **Status** | PARTIAL (v1.8 qol — see T11-RESULTS.md) |
 | **Phase** | 4 — Optional |
 | **Parent** | T02–T06 baseline complete |
 | **Children** | — |

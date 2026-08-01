@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T04 |
-| **Status** | TODO |
+| **Status** | DONE (see T04-RESULTS.md) |
 | **Phase** | 1 — Address list scripts |
 | **Parent** | T03 |
 | **Children** | T09 (migration skill AA tier) |

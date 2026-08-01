@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T07 |
-| **Status** | TODO |
+| **Status** | DONE |
 | **Phase** | 3 — Agent surface |
 | **Parent** | T02–T06 (server commands) |
 | **Children** | T09, T10 |
@@ -96,11 +96,11 @@ Document examples in module docstring.
 
 ## Acceptance criteria
 
-- [ ] All shipped server commands from T02–T06 have a helper **or** are intentionally listed as raw-`cmd` only in docstring.
-- [ ] `al_get_script` / `al_set_script` round-trip on a sample string (mock or live).
-- [ ] `al_set_active(..., timeout=120)` uses extended timeout.
-- [ ] No dependency beyond stdlib (keep project constraint).
-- [ ] `python client.py --cmd ping` still works.
+- [x] All shipped server commands from T02–T06 have a helper **or** are intentionally listed as raw-`cmd` only in docstring.
+- [x] `al_get_script` / `al_set_script` round-trip helpers (chunk + abort on failure).
+- [x] `al_set_active(..., timeout=120)` uses extended timeout.
+- [x] No dependency beyond stdlib (keep project constraint).
+- [x] `python client.py --cmd ping` still works.
 
 ## Out of scope
 

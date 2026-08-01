@@ -1,5 +1,16 @@
 # Using CE75 Unreal Scripts with the Remote Tool
 
+## Table inventory vs CE75 helpers
+
+Two complementary paths:
+
+| Path | Use for | API |
+|------|---------|-----|
+| **Table migration** (`al*` / `st*`) | Rebind a **loaded** address list + dissect **definitions** to a new build | Native `ce_server.lua` commands + `client.py` helpers — see `docs/TABLE-MIGRATE.md` |
+| **CE75 / game plugins** (this doc) | Discover GEngine, player, inventory, FNames at runtime | `runScript` / `getAddress` symbols from CE75.LUA |
+
+Prefer native `alDump` / `stDump` over ad-hoc `runScript` that walks `getAddressList` or `getStructure` by name (name→index-0 wipe risk). CE75 structure builders should still call `UEngine_ensureDissectSeed` (or remote `stEnsureSeed`) before creating dissects on an empty list.
+
 ## Setup Order
 
 1. **Attach CE to the game process** (G1R-Win64-Shipping.exe)

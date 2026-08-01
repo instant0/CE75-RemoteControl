@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T03 |
-| **Status** | TODO |
+| **Status** | DONE (see T03-RESULTS.md) |
 | **Phase** | 1 — Address list write path |
 | **Parent** | T02 |
 | **Children** | T04 (enable path builds on sets) |

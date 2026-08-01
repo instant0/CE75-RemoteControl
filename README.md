@@ -79,6 +79,28 @@ python client.py -i  # interactive shell
 | `alDump [offset] [limit]` | Address-list inventory TSV (no script bodies); CLASS=AA/EXPR/… |
 | `alGet <id>` | One memrec detail (metadata + value sample) |
 | `alResolve <id>` | Live CurrentAddress / readable / value |
+| `alSetDesc <id> <text>` | Rename/set description |
+| `alSetAddress <id> <expr>` | Set address expression (keeps offsets) |
+| `alSetOffsets <id> <hex,hex>` | Set pointer offset chain |
+| `alSetType <id> <n>` | Set variable type integer |
+| `alGetScript <id> [off] [len]` | AA script slice as hex |
+| `alSetScriptBegin/Chunk/Commit/Abort` | Chunked AA script replace |
+| `aaCheck <id>` | Syntax-check AA script |
+| `alSetActive <id> 0\|1 [nocheck]` | Enable/disable (AA enable runs aaCheck unless `nocheck`) |
+| `alDisableSoft <id>` | Disable without running [Disable] section |
+| `alApply stop=1 hex=…` | Batch setDesc/setAddress/setOffsets/setType (one sync) |
+| `alAudit [n]` | Recent command audit ring buffer |
+| `symGet` / `symSet` | Resolve / registerSymbol helpers |
+| `runScriptSafe <code>` | runScript with banned-API string filter |
+| `stDump` | List global dissect structures (name/size/elems) |
+| `stFind <name>` | Find structure by exact name |
+| `stGet <name> [elemOff] [elemLimit]` | Dump structure elements (default limit 500) |
+| `stEnsureSeed` | Ensure `DO_NOT_DELETE_PLACEHOLDER` exists (empty-list crash guard) |
+| `stClone <src> <dst>` | Clone structure definition (`src -> dst` / `src\|dst` OK) |
+| `stBegin` / `stEnd <name>` | Batch `beginUpdate` / `endUpdate` (commit before rename) |
+| `stUpsertElem …` | Insert/update element at offset (prefer `name\|off\|…` form) |
+| `stClearElements <name>` | Destroy all elements on a structure (not the placeholder) |
+| `stSetName <old> <new>` | Rename **after** `stEnd` (refuses mid-edit) |
 | `readByte <hexaddr>` | Read 1 byte as hex |
 | `readBytes <hexaddr> <size>` | Returns hex-encoded bytes |
 | `readQword <hexaddr>` | Read 8 bytes as hex |
@@ -93,6 +115,29 @@ python client.py -i  # interactive shell
 | `close` | Disconnect |
 
 Any CE Lua API not listed can be called via `runScript`.
+
+## Table migration (address list & structures)
+
+Port a **loaded** `.CT` to a new game build over this remote: rebind AOBs/scripts, expression/pointer rows, and dissect definitions. The **user saves** in CE when satisfied (no agent `saveTable` pipeline).
+
+| Resource | Role |
+|----------|------|
+| `docs/TABLE-MIGRATE.md` | Full command reference, wire formats, algorithm, crash rules |
+| `skills/ce-table-migrate/SKILL.md` | Agent playbook (AA → enable → pointers → structs) |
+| `skills/ce-table-remote/SKILL.md` | Foundation: `sync_call`, seed, rename-after-commit |
+| `client.py` | `CERemote` helpers (`al_*`, `st_*`, script chunking, per-call timeout) |
+
+```python
+from client import CERemote
+ce = CERemote("192.168.176.1", 8000, timeout=120)
+print(ce.table_status())
+print(ce.al_dump(limit=20)[:500])
+ce.st_ensure_seed()  # if stCount was 0 — empty dissect list crashes CE
+```
+
+**Order:** fix/enable bootstrap AA (symbols) → fix EXPR/POINTER rows → validate structures.  
+**Timeouts:** use **≥ 120s** for `alSetActive`, large `AOBScan`, large `stClone`.  
+**Structures:** `stEnd` before `stSetName`; never `getStructure("name")`; keep `DO_NOT_DELETE_PLACEHOLDER`.
 
 ## Prerequisites
 
@@ -344,6 +389,13 @@ These CE Lua functions frequently crash the relay or CE itself when called from 
 | `UEngine_findObjectStart()` | Iterates disconnected object links; crashes with bitwise error on nil | Don't use; scan for known values via `AOBScan` instead |
 | `component_findComponentByName(obj, name)` | Only exists if G1R game plugin is loaded; crashes when absent | Wrap in `pcall` or load the plugin first |
 | `enumModules()` property access (via `runScript`) | Module table keys are `Address` (uppercase), not `address`; accessing a nil field in `string.format` can crash | Use the native `enumModules` command (returns tab-separated text); or check key names first |
+| `getStructure("Name")` (string arg) | Coerces to index **0** — can wipe/edit the first structure | Use native `stFind` / `stGet` or `_G._ue_st_find_by_name(name)` (index scan only) |
+| Empty global structure list (0 dissects) | Dissect UI/callbacks: `list index (0) out of bounds` | `stEnsureSeed` / keep `DO_NOT_DELETE_PLACEHOLDER`; never empty the list |
+| Rename structure while still editing (`beginUpdate`) | Rename fails or UI inconsistency | Always `stEnd` first, then `stSetName`; clones rename only after fill+commit |
+| Address list / structures / `Active` without main-thread sync | VCL crash / corruption | Use native `al*`/`st*` only (server uses `synchronize`) |
+| `synchronize` + CE modal dialog (failed AA) | **Deadlock** — pipe waits forever | `aaCheck` first; user present to dismiss; client timeout ≥120 |
+| Mass `Active=true` | Inject storms, reinterpret storms, freezes | Enable **one** bootstrap/inject at a time |
+| Dumping all AA scripts in one response | >48 KiB / hang | `alDump` metadata only; chunk with `alGetScript` / `al_get_script` |
 
 ## Making `runScript` calls safe
 
@@ -378,7 +430,8 @@ The following skills are available for automated UE game memory hacking:
 | `ue-stats-attributes` | Find/modify health, mana, and GAS attribute values |
 | `ue-inventory-hacking` | Read/modify inventory item counts |
 | `ce-remote-scanning` | Memory scanning best practices and crash avoidance |
-| `ce-table-remote` | Address-list/structure remote foundation (`sync_call`, tableStatus, rename notes) |
+| `ce-table-remote` | Address-list/structure remote foundation (`sync_call`, seed, rename-after-commit) |
+| `ce-table-migrate` | Port loaded CT to new game build (AA → enable → pointers → structs) |
 | `game/DyingLight2/player-variables` | DL2 `playerStat` bootstrap AOB / EXPR row porting |
 
 Load with: `skill ue-character-finding` (or path under `skills/`)

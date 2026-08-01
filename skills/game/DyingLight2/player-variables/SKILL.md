@@ -65,15 +65,18 @@ Not pure code-xref only:
 
 Offsets **inside** the blob also drift between versions; structure names like `FloatPlayerVariable 1.90` in the CT are hints, not guarantees.
 
-## Remote workflow (no full al* API required)
+## Remote workflow (v1.4+ al* commands)
 
 ```text
-1. tableStatus / process check
-2. AOBScan new candidate (v1.1+ accepts ** wildcards on native command)
-3. For each hit: candidate = hit+1; readFloat/readInteger at known offs; score vs defaults
-4. Patch bootstrap script pattern (T04) or temporary runScript RegisterSymbol for test
-5. Only then enable bootstrap AA; verify getAddress playerStat
-6. Spot-check EXPR rows (alResolve once T02 exists)
+1. tableStatus / alDump — find bootstrap ID (often CLASS=AA, desc contains playervariables)
+2. alGetScript <id> — read {$lua} AOB pattern
+3. AOBScan new candidate (** wildcards OK on native command)
+4. Score hits: playerStat = hit+1; read known offsets vs defaults
+5. alSetScript* — write updated pattern into bootstrap script
+6. aaCheck <id>
+7. alSetActive <id> 1  (timeout ≥120; only this bootstrap first)
+8. getAddress playerStat / alResolve on EXPR children
+9. alSetActive other inject AA only if intentional
 ```
 
 **Do not** enable inject AA scripts while retuning playerStat unless intended.

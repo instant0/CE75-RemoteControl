@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T08 |
-| **Status** | TODO |
+| **Status** | DONE |
 | **Phase** | 3 — Agent surface |
 | **Parent** | T02–T06 (command set known) |
 | **Children** | — |
@@ -50,10 +50,10 @@ Must include:
 
 ## Acceptance criteria
 
-- [ ] `TABLE-MIGRATE.md` exists and matches **shipped** command names (update if impl drifted).
-- [ ] README command table includes new commands.
-- [ ] Crash section mentions deadlock and structure index bug.
-- [ ] Explicit: user saves table; agent does not need saveTable.
+- [x] `TABLE-MIGRATE.md` exists and matches **shipped** command names (update if impl drifted).
+- [x] README command table includes new commands.
+- [x] Crash section mentions deadlock and structure index bug.
+- [x] Explicit: user saves table; agent does not need saveTable.
 
 ## Out of scope
 

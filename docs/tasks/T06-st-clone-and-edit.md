@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|--------|
 | **ID** | T06 |
-| **Status** | TODO |
+| **Status** | DONE (see T06-RESULTS.md) |
 | **Phase** | 2 — Dissect structures write path |
 | **Parent** | T05 |
 | **Children** | T09 structure port steps |
@@ -99,12 +99,12 @@ If clear is too dangerous for v1:
 
 ## Acceptance criteria
 
-- [ ] `stClone` produces independent structure visible in CE structure list with matching element count/offsets/names/types for non-child fields.
-- [ ] ChildStruct links preserved when child names still exist.
-- [ ] `stUpsertElem` can fix one offset’s name/type.
-- [ ] Failed clone does not delete source.
-- [ ] No string passed to `getStructure`.
-- [ ] help updated.
+- [x] `stClone` produces independent structure visible in CE structure list with matching element count/offsets/names/types for non-child fields.
+- [x] ChildStruct links preserved when child names still exist.
+- [x] `stUpsertElem` can fix one offset’s name/type.
+- [x] Failed clone does not delete source.
+- [x] No string passed to `getStructure`.
+- [x] help updated.
 
 ## Out of scope
 

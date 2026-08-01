@@ -50,6 +50,8 @@ This document is the **common attachment** for all `Txx` tasks. Task files refer
 | Oversized response (all scripts in one dump) | Pipe/write failure / client hang | Metadata dump only; chunk scripts; MAX_RESP ~48k |
 | Oversized request (full script one line) | Same | Chunked script set (T04) |
 | `getStructure` with name string | Wrong index / mass wipe | Name-scan helper only |
+| **Empty global structure list** | Dissect TreeView / callbacks: `list index (0) out of bounds` | Always keep ≥1 struct; `stEnsureSeed` → `DO_NOT_DELETE_PLACEHOLDER` (CE75-DISSECT-CRASH) |
+| **Rename structure while editing** | Rename fails / UI corrupt mid-`beginUpdate` | `stEnd` (commit) **before** `stSetName`; clone uses temp name then renames after fill |
 | Mass `Active=true` | Inject failures, reinterpret storms, freezes | One-by-one enables in skill |
 | AA enable failure mid-inject | Game/CE unstable | Soft disable; don’t batch enables |
 | Client timeout 30s default | False failures | 120s for Active/AOB paths |
@@ -79,6 +81,8 @@ MemoryRecord
 getStructureCount() / getStructure(index)  -- INDEX ONLY
 createStructure(name); addToGlobalStructureList()
 beginUpdate/endUpdate; addElement(); Element fields...
+-- Empty list crash: keep DO_NOT_DELETE_PLACEHOLDER (stEnsureSeed)
+-- Rename only after endUpdate / stEnd (not mid-edit)
 
 autoAssemble(text) / autoAssembleCheck(text, enable, targetself)
 registerSymbol(name, address, donotsave?)
