@@ -13,6 +13,7 @@ Default: `192.168.176.1:8000`
 
 ## DON'T
 - Parallel relay calls / thrash / reconnect spam
+- Full-process / other-DLL scans — **gamedll + engine only** (see `scan-scope.md`)
 - `enumMemoryRegions`, `createMemScan`, `varscan_*` from remote
 - `getStructure("Name")` — use `stFind` / `_ue_st_find_by_name`
 - Mass `Active=true`

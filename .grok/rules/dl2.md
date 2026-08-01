@@ -16,3 +16,4 @@
 - `playerStat` dual-register
 - Report live HP/cash found until base proved this attach
 - Pad-flood CE Structures back into CT
+- Scan outside **gamedll / engine** (see `scan-scope.md`)
