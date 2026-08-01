@@ -10,16 +10,19 @@
 
 ```text
 RAX = 0000000000000013          # day-related small int (e.g. 19)
-RBX = 00000211C41261D0          # this = DayNightCycle / TIMESTRUCT
+RBX = 00000211C41261D0          # this = DayNightCycle (same object 193 captures as TIMESTRUCT)
 RCX = 00000211C412622C          # RBX+0x5C = &time frac float
 RIP = 00007FFA210DC184          # gamedll day/night update family
 ```
+
+**CE symbol `TIMESTRUCT`:** only valid while **cheat 193** is enabled (hook stores RBX). Not from 279. Not a free root.
 
 ## Conclusion
 
 - **No path to `PlayerDI_PH` from this frame.** World clock object, not entity hub.  
 - PDB: `DayNightCycle` separate from `PlayerDI` / `PlayerHealthModule` / `PlayerState`.  
 - Player entry: `IGame::GetLocalPlayerEntity` or player-side access logging (inventory/health/FloatPlayerVariable).  
+- Do not fold TIMESTRUCT into Start cheating unless clock is intentionally a permanent session symbol.
 
 ## Server note (same session)
 

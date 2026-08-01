@@ -9,7 +9,7 @@
 | Path | What it is |
 |------|------------|
 | [TABLE-MIGRATE.md](TABLE-MIGRATE.md) | Rebind a loaded CE table over the remote (`al*` / `st*`) |
-| [CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md) | Offline `.CT` XML edits: AA `{…}` comments, ID surgery, validation |
+| [CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md) | Offline `.CT` XML: AA `{…}` comments, **Structures/dissect schema**, ID surgery, validation |
 | [AOB-CODE-DRIFT.md](AOB-CODE-DRIFT.md) | Code drift classes (reg/ModRM, RIP-global, …) for relocating AOBs |
 | [NONGOALS-AND-HAZARDS.md](NONGOALS-AND-HAZARDS.md) | What we will not build + crash/hang catalogue |
 | [CE-GROUP-SCAN.md](CE-GROUP-SCAN.md) | CE Grouped scan language + remote `GroupScan` (≥ v1.8.3) |

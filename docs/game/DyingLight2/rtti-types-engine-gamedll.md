@@ -579,3 +579,5 @@ lifecs::VILifeHealth
 Dumping **all** RTTI from a running process is possible (scan module for `.?AV`) but duplicates this offline extract for MSVC builds. Prefer offline DLL dump after updates.
 
 Live usefulness of RTTI is **`getRTTIClassName(object)`** on pointers you already have (e.g. confirm `PlayerState`, `PlayerDI_PH`, `StringPlayerVariable`).
+
+**Same mechanism as CE UI:** Memory View → **Define New Structure** on an address suggests the class name from MSVC RTTI on that object. Structure travel / map work should name Structures with those RTTI strings, not manual `Type 2` / version suffixes (those are human dups). Catalog symbol `PlayerVariables` is **host+8** (offset origin), not necessarily an RTTI object — call `getRTTIClassName` on **host** / real instances / access-log `this` (often RCX).

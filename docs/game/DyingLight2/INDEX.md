@@ -30,7 +30,7 @@ Confidence labels:
 | Modules (gamedll vs engine) | **Proved** (pattern) | [modules.md](modules.md) | Bases ASLR; use names |
 | **PlayerVariables** (config floats; legacy CT `playerStat`) | **Proved** locator | [player-variables.md](player-variables.md) | **PlayerState+0xBA8** (2026-08-01); recipe short; research → [player-variables-history.md](player-variables-history.md) |
 | Float name → catalog offset map | **CT/host** + generator notes | [player-vars-array.md](player-vars-array.md) | Map ≠ live instance |
-| Time freeze / DayNightCycle / TIMESTRUCT+0x5C | **Proved** inject site (session) | [time-weather.md](time-weather.md) | Visuals may not fully track float-only freeze |
+| Time freeze / DayNightCycle / TIMESTRUCT+0x5C | **Proved** inject (AA **193** must be ON) | [time-weather.md](time-weather.md) | Symbol **not** from 279; not a free root; visuals may lag float freeze |
 | Live HP (`LifeHealth+0x1C`) | **CT/host layout** + **strategy** | [health-money.md](health-money.md), [FIND-LIVE-HEALTH-MONEY.md](FIND-LIVE-HEALTH-MONEY.md) | Field known; **live base not proved** on current attach |
 | Live cash (`InventoryMoney+0x38`) | **CT/host layout** + **strategy** | same | Prefer money scan first |
 | Named APIs / hierarchy | Curated extract | [function-catalog.md](function-catalog.md) | |
@@ -47,6 +47,7 @@ Confidence labels:
 | Current HP field | `LifeHealth + 0x1C` | Config MaxHealth on PlayerVariables as “HUD HP” |
 | Module → LifeHealth ptr | Re-check **+0x48** and CT **+0x88**; trust RTTI on pointer | Single offset forever |
 | Money field | `InventoryMoney + 0x38` | PlayerVariables pricing floats as wallet |
+| `TIMESTRUCT` | After **193** enable + time tick | Using it with 279 only / as always-on hub |
 
 ---
 
@@ -92,7 +93,7 @@ Confidence labels:
 | Config floats | **PlayerVariables** catalog base + offset — locator [player-variables.md](player-variables.md) |
 | Live HP field | `LifeHealth+0x1C` (not PlayerVariables) — **base TBD** until FIND-LIVE phases done |
 | Live cash field | `InventoryMoney+0x38` — **base TBD** until FIND-LIVE phases done |
-| Time frac | DayNightCycle / TIMESTRUCT `+0x5C` (not player entity) |
+| Time frac | `[TIMESTRUCT]+0x5C` only while **193** is enabled (not player; not 279) |
 
 ---
 

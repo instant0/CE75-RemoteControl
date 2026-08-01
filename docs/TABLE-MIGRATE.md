@@ -119,6 +119,8 @@ Raw: ops joined with newlines, hex-encoded: `alApply stop=1 hex=...` or `alApply
 
 ### Structures
 
+**On-disk XML schema** (attributes, RLE, nested autocreate) is documented in **[CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md) § Structures / dissect XML** — use that before re-reading CE source. CE source path remains `/mnt/y/Lazarus/Projects/cheat-engine-7.5/Cheat Engine/StructuresFrm2.pas` for verification only.
+
 | Command | Notes |
 |---------|--------|
 | `stDump` | List global definitions |

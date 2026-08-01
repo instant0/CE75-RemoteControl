@@ -30,7 +30,7 @@ Skills teach **how to operate CE remote / AOB / table migrate** for any game.
 | [player-vars-array.md](player-vars-array.md) | FloatPlayerVariable name↔offset map |
 | [health-money.md](health-money.md) | LifeHealth / InventoryMoney field layouts |
 | [FIND-LIVE-HEALTH-MONEY.md](FIND-LIVE-HEALTH-MONEY.md) | Strategy to find **live** HP & money bases |
-| [time-weather.md](time-weather.md) | DayNightCycle / TIMESTRUCT / freeze time |
+| [time-weather.md](time-weather.md) | DayNightCycle / TIMESTRUCT (**AA 193 ON**) / freeze time |
 | [host-notes-extract.md](host-notes-extract.md) | Re-mined host notes (often historical) |
 | [rtti-types-engine-gamedll.md](rtti-types-engine-gamedll.md) | Raw RTTI/type name extract |
 | [scraps/](scraps/) | Dated investigation notes |

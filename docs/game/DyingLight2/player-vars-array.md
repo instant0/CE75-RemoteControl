@@ -84,9 +84,62 @@ So for a **float** field with config default `D`, at rest you often see:
 [PlayerVariables + off + 4] = D   (base/config twin)
 ```
 
+After play / skills / buffs the cells often **split**:
+
+```text
+[PlayerVariables + off + 0] = live effective   e.g. MaxStamina ~5.2
+[PlayerVariables + off + 4] = base/default     e.g. still ~0.8
+```
+
 **Byte toggles** and **integers** use the same *idea* (typed cells + pair / tail) but **different sizes and strides** — do not assume 0x18 for bools (1.90 `GlideNitroAvailable` is byte-sized in the expanded dump).
 
 **Implication for scanning:** a single `0.25` is weak (many fields). A **pair** `0.25, 0.25` at `off` and `off+4`, plus **neighbor pairs** at catalog-relative gaps, is a real fingerprint.
+
+### Which cell to edit / freeze (empirical, 2026-08-01)
+
+The **map offset** is the field **identity** (registration). It is **not** a guarantee that gameplay always reads float-at-map+0.
+
+| Cell | Typical role | When freeze/edit here works |
+|------|--------------|------------------------------|
+| **`PlayerVariables+map`** (`+0`) | Live / actual / effective | Many fields (e.g. **MoveSprintSpeed** `+0x41A8` — edit at map+0 had effect) |
+| **`PlayerVariables+map+4`** | Twin: base / config / load default | Some freezes (several **Glide\*** costs/limits) only stuck or only affected gameplay at **+4** |
+
+**Do not** mass-append `+4` to every float row. **Do not** treat missing `+4` in the CT as “this field has no twin” — often the row was simply unused or not yet fixed after the PlayerVariables remap.
+
+#### Proved / observed examples (TEST CT + live)
+
+| Map name | Offset | Hot cell for effect | Notes |
+|----------|--------|---------------------|--------|
+| **MoveSprintSpeed** | `+0x41A8` | **map+0** | User edit of `PlayerVariables+41A8` had in-game effect |
+| **GlideStartStaminaCost** | `+0x2820` | **map+4** (table) | CT row uses `…+2820+4` after manual fix |
+| **GlideStaminaCost** | `+0x2838` | **map+4** (table) | Same; access-log also saw `FloatPlayerVariable` slot at host-relative `0x2838` |
+| **GlideStaminaCostAtNight** | `+0x2750` | **map+4** (table) | |
+| **GlideMaxYVel** | `+0x2798` | **map+4** (table) | |
+| **GlideNitroStaminaCost** | `+0x2920` | **map+4** (table) | |
+| **GlideNitroCooldown** | `+0x2950` | **map+4** (table) | |
+| **MaxStamina** | `+0x3B98` | **map+0 shows live** | Display ~**5.2** (effective); twin often still ~**0.8** (default). Classify freeze cell by test if needed. |
+| GlideDive / SpeedMag* rows | various | map+0 in CT | May be unfixed/unused — **not** proof they lack a twin |
+
+#### Per-field test (until a field is classified)
+
+```text
+1. Show both floats: map+0 and map+4
+2. Note equal defaults vs split (5.2 / 0.8 style)
+3. Edit only +0 → test in-game
+4. If no effect: restore; edit only +4 → test
+5. If snaps back: try both, or find what rewrites actual from base
+```
+
+#### Table authoring rule
+
+```text
+Address = PlayerVariables + <map hex>          # default
+Address = PlayerVariables + <map hex> + 4      # only when live freeze/effect proved twin
+```
+
+Bool/int slots: **do not** assume a float-style `+4` twin.
+
+There is **no** complete reverse matrix yet of “every consumer reads cell A vs B.” Classification is **empirical per name** (or per code path). Access-log proved **slot identity** (e.g. GlideStaminaCost object), not a global “always +4” rule.
 
 ### How this helps Glide → catalog base (research fallback)
 
@@ -317,6 +370,7 @@ Pipe note: if the relay is line-oriented, strip `--` comments and send as one lo
 | 2026-08-01 | Wrong path: all-vtSingle map labeled `…20260801-BROKEN` |
 | 2026-08-01 | Correct path: retuned `/mnt/r/dl2_arrayscan_20260801.lua` → CE struct `FloatPlayerVariable 20260801` (2449) |
 | 2026-08-01 | Documented map vs live **PlayerVariables** catalog base (legacy `playerStat`); dual actual/base; Glide pair fingerprint |
+| 2026-08-01 | Which cell: map+0 vs map+4 per field (MoveSprintSpeed +0 works; Glide* freezes +4; MaxStamina live ~5.2 vs twin ~0.8); no mass-+4 |
 | 2026-08-01 | GroupScan fallback + two-heap disambiguation → [player-variables-history.md](player-variables-history.md) |
 | 2026-08-01 | Naming pass: PlayerVariables primary; GroupScan not preferred locator |
 | 2026-08-01 | Dissect expand script `/mnt/r/dl2_fpv_dissect_from_map_20260801.lua` → `FloatPlayerVariable 20260801 Dissect` (~12.5k elems) |

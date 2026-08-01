@@ -62,7 +62,7 @@ gamedll_ph_x64_rwdi
 └── (many other inject sites in CT — not yet cataloged)
 
 CE symbols (table runtime, not game exports)
-├── TIME / TIMESTRUCT     — freeze-time AA
+├── TIME / TIMESTRUCT     — AA 193 only (enable required; not 279)
 ├── playerStat / playerStatAlt — bootstrap AA
 └── NIGHTXPBONUS          — night XP cheat family
 ```
@@ -176,9 +176,10 @@ Not yet mapped into this catalog. When porting another AA row, add a subsection 
 
 | Symbol | Producer | Consumers |
 |--------|----------|-----------|
-| `TIME` / `TIMESTRUCT` | Time Related AA | `[TIMESTRUCT]+5C` float row |
-| `playerStat` / `playerStatAlt` | Enable playervariables AA | Dozens of `playerStat + off` rows |
-| `NIGHTXPBONUS` | Night XP AA family | `[NIGHTXPBONUS]+5C` etc. |
+| `TIME` / `TIMESTRUCT` | **AA 193 only** (must stay enabled) | Child **192** `[TIMESTRUCT]+5C`; **not** registered by 279 |
+| `PlayerState` / `PlayerVariablesThis` / `PlayerVariables` | **AA 279** Start cheating | PV EXPR rows; structure hubs |
+| `playerStat` / `playerStatAlt` | Legacy PV bootstrap (prefer `PlayerVariables`) | Old EXPR rows |
+| `NIGHTXPBONUS` | Night XP AA family (enable that AA) | `[NIGHTXPBONUS]+…` rows |
 
 ---
 

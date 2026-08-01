@@ -1,5 +1,20 @@
 # Dying Light 2 — Time / Weather research dump
 
+## TIMESTRUCT — requirements (do not skip)
+
+| | |
+|--|--|
+| **What** | CE symbol holding pointer to day/night clock object; float at **`[TIMESTRUCT]+0x5C`** |
+| **Producer** | Cheat **AA 193** only (`alloc` + hook `mov [TIMESTRUCT],rbx`) |
+| **Required** | **193 enabled** after world load (and time system running — not menu-only) |
+| **Not from** | **279** Start cheating — does **not** register `TIMESTRUCT` |
+| **Not** | A free discovery root / always-on global |
+| **Into 279?** | Only if we later decide clock is worth a permanent session symbol; default **no** |
+
+If 193 is off: `getAddress TIMESTRUCT` may be missing, stale, or point at empty alloc — **do not** use for structure travel.
+
+---
+
 **Status:** Live-verified inject site + named engine anchors (remote CE v1.8.1).  
 **Verified:** 2026-08-01 (game package date noted ~2026-06-14; exact product version uncertain).  
 **Process (session):** `DyingLightGame_x64_rwdi.exe`  
@@ -9,9 +24,8 @@
 
 **General AOB method:** `skills/ce-aob-scan` (this file is a **case study**, not the AOB skill).  
 **API hierarchy lookup:** `function-catalog.md`  
-**Modules:** `modules.md`
-
-This dump records one feature so names, RVAs, and ranking signals are not lost.
+**Modules:** `modules.md`  
+**Private card:** `private/DyingLight2/cheats/193-time-related.md`
 
 ---
 
@@ -22,9 +36,9 @@ This dump records one feature so names, RVAs, and ranking signals are not lost.
 | Need | Mechanism |
 |------|-----------|
 | Find code that updates time each tick | AOB on `movss [rbx+5C], xmm0` + following load |
-| Capture object | Hook saves **rbx** → symbol `TIMESTRUCT` |
-| Freeze | Original store still runs, or UI freezes `[TIMESTRUCT]+5C` |
-| Display / set | Child memrec float at `[TIMESTRUCT]+5C` |
+| Capture object | **193 ON:** hook saves **rbx** → symbol `TIMESTRUCT` |
+| Freeze | Original store still runs, or UI freezes `[TIMESTRUCT]+5C` (needs symbol live) |
+| Display / set | Child **192** float at `[TIMESTRUCT]+5C` |
 
 CT note: day/night **visuals may not fully track** when only the float is forced (description says Day/Night visuals will not be affected).
 

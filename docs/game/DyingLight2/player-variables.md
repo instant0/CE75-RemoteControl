@@ -88,10 +88,10 @@ Host notes’ **PlayerState+0xE8** is **historical**; this build uses **+0xBA8**
 | **`PlayerVariables`** | Live aggregate (config/balancing) |
 | **Engine `this`** | Pointer game code uses; HoldJump = `[this+0x2F90]`; RTTI at +0: **`StringPlayerVariable`** |
 | **Catalog base** | **`this + 8`** — origin for registration/map offsets (legacy `playerStat`) |
-| **Value address** | `catalog + map_offset` (= `this + 8 + off`) |
+| **Value address** | `catalog + map_offset` (= `this + 8 + off`); optional **`+4`** twin — see [player-vars-array.md](player-vars-array.md) § dual float |
 | **`FloatPlayerVariable YYYYMMDD`** | Name → offset **catalog only** — [player-vars-array.md](player-vars-array.md) |
-| **Float slot** | Often actual @+0, base/config @+4; stride often `0x18` |
-| **Bool slot** | Byte-style; wrong CE type → garbage (e.g. “192”) |
+| **Float slot** | Dual floats common: **actual @+0**, **base/config @+4**; which cell freezes work is **per field** (not always +0, not always +4). Stride often `0x18` |
+| **Bool slot** | Byte-style; wrong CE type → garbage (e.g. “192”); do not assume float `+4` twin |
 
 Do **not** treat the name-map structure as the live instance.  
 Do **not** use GroupScan as primary locator when the typed chain works.

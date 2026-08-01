@@ -8,7 +8,7 @@ Product constraints and CE hazards for remote table work.
 | Non-goal | Reason |
 |----------|--------|
 | Agent `saveTable` / `loadTable` pipeline | User saves when table works |
-| Offline generation of a full new `.CT` file as primary engine | CE already holds scripts, hierarchy, structs; live rebind is correct model. **Surgical** offline `.CT` XML edits are allowed when requested — see [CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md) |
+| Offline generation of a full new `.CT` file as primary engine | CE already holds scripts, hierarchy, structs; live rebind is correct model. **Surgical** offline `.CT` XML edits are allowed when requested — see [CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md) **§ MANDATORY** (raw `<` in AssemblerScript **breaks the whole table**) |
 | Perfect automatic understanding of all AA scripts | Semantic / disassembly judgment |
 | Implementing breakpoint push-over-TCP in v1 | See `docs/BREAKPOINT_STRATEGY.md` |
 | Editing hotkeys, trainer forms, embedded table files | Out of migration path |
@@ -29,6 +29,21 @@ Product constraints and CE hazards for remote table work.
 | Structure **definition** auto-bound to one address | Definitions are layouts only | Validate with separate live base; optional StructureFrm (T11) |
 
 ## Crash / hang / relay issues to program around
+
+### Relay discipline (agent operational rules)
+
+**Host:** CE relay for live DL2 work is **`192.168.176.1:8000`** (not localhost).
+
+The pipe is **very sensitive**. Agents have crashed it by parallel commands, ping+work bursts, and thrashing. Rules:
+
+1. **One command at a time** — never parallel tool calls against the relay.  
+2. **Health check** — at most **one** `ping` when needed; do **not** combine with other work in the same burst.  
+3. **No thrashing** — no port-hunting, no retry storms, no “try five things.”  
+4. **Heavy jobs** — one CE-local Lua body with a long timeout; not thousands of remote reads.  
+5. **If unsure, don’t send** — prepare offline first.  
+6. After a reset/hang: **one** intentional ping only to see if it lives.
+
+Details also in `skills/ce-remote-scanning/SKILL.md` § RELAY DISCIPLINE.
 
 ### A. Confirmed / documented in this repo
 
@@ -119,3 +134,5 @@ T00 spike
 - `docs/CE75-INTEGRATION.md` — GEngine / inventory helpers  
 - `SOLUTION.md` — createThread analysis  
 - CE source under `/mnt/y/Lazarus/Projects/cheat-engine-7.5/Cheat Engine/`  
+- **`.CT` Structures/dissect XML schema** (attributes, RLE, nesting): [CE-TABLE-OFFLINE-EDIT.md](CE-TABLE-OFFLINE-EDIT.md) § Structures — prefer that over re-reading `StructuresFrm2.pas`  
+
