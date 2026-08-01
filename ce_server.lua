@@ -1,6 +1,6 @@
 local PIPE_NAME = "UEScanRemote"
 local PIPE_BUFFER = 65536
-local VERSION = "ce-server v1.8 (CE 7.5 qol)"
+local VERSION = "ce-server v1.8.1 (CE 7.5 qol+readfix)"
 local MAX_RESP = 48000
 local MAX_OFFSETS = 512
 local MAX_SCRIPT_BYTES = 262144  -- 256 KiB staging cap
@@ -1661,56 +1661,74 @@ local function process_command(cmd)
     return fit_response(data)
 
   elseif cmd:match("^readByte (%x+)$") then
-    local addr = tonumber(cmd:match("^readByte (%x+)$"), 16)
-    local val = readByte(addr)
-    if val then
+    local ahex = cmd:match("^readByte (%x+)$")
+    local addr = tonumber(ahex, 16)
+    if not addr then return "ERROR: BAD_ADDR" end
+    local ok, val = pcall(readByte, addr)
+    if ok and val then
       return string.format("%02X", val)
     else
       return "ERROR: readByte failed at " .. string.format("%X", addr)
     end
   elseif cmd:match("^readBytes (%x+) (%d+)$") then
-    local addr = tonumber(cmd:match("^readBytes (%x+) (%d+)$"), 16)
-    local size = tonumber(cmd:match("^readBytes (%x+) (%d+)$"))
-    local bytes = readBytes(addr, size, true)
-    if bytes then
+    -- CRITICAL: do not tonumber(match(...), 16) when match returns 2 values —
+    -- the 2nd capture becomes tonumber's base → "base out of range" / CE range error.
+    local ahex, szs = cmd:match("^readBytes (%x+) (%d+)$")
+    local addr = tonumber(ahex, 16)
+    local size = tonumber(szs)
+    if not addr then return "ERROR: BAD_ADDR" end
+    if not size or size < 1 then return "ERROR: BAD_SIZE" end
+    if size > 4096 then size = 4096 end  -- hard cap; prevents huge native reads
+    local ok, bytes = pcall(readBytes, addr, size, true)
+    if ok and bytes then
       return fit_response(bytes_to_hex(bytes))
     else
       return "ERROR: Failed to read memory at " .. string.format("%X", addr)
     end
   elseif cmd:match("^writeBytes (%x+) ([0-9A-Fa-f%s]+)$") then
-    local addr = tonumber(cmd:match("^writeBytes (%x+) ([0-9A-Fa-f%s]+)$"), 16)
-    local hex = cmd:match("^writeBytes (%x+) ([0-9A-Fa-f%s]+)$")
+    local ahex, hex = cmd:match("^writeBytes (%x+) ([0-9A-Fa-f%s]+)$")
+    local addr = tonumber(ahex, 16)
+    if not addr then return "ERROR: BAD_ADDR" end
     local t = hex_to_table(hex)
     if not t or #t == 0 then
       return "ERROR: Invalid hex data"
     end
-    local n = writeBytes(addr, t)
-    if n and n > 0 then
+    if #t > 4096 then return "ERROR: WRITE_TOO_LARGE" end
+    local ok, n = pcall(writeBytes, addr, t)
+    if ok and n and n > 0 then
       return string.format("OK: Wrote %d bytes to %X", n, addr)
     else
       return "ERROR: writeBytes failed"
     end
   elseif cmd:match("^readQword (%x+)$") then
-    local addr = tonumber(cmd:match("^readQword (%x+)$"), 16)
-    local val = readQword(addr)
-    if val then
+    local ahex = cmd:match("^readQword (%x+)$")
+    local addr = tonumber(ahex, 16)
+    if not addr then return "ERROR: BAD_ADDR" end
+    local ok, val = pcall(readQword, addr)
+    if ok and val then
       return string.format("%X", val)
     else
       return "ERROR: readQword failed at " .. string.format("%X", addr)
     end
   elseif cmd:match("^readDword (%x+)$") then
-    local addr = tonumber(cmd:match("^readDword (%x+)$"), 16)
-    local val = readInteger(addr)
-    if val then
+    local ahex = cmd:match("^readDword (%x+)$")
+    local addr = tonumber(ahex, 16)
+    if not addr then return "ERROR: BAD_ADDR" end
+    local ok, val = pcall(readInteger, addr)
+    if ok and val then
       return string.format("%X", val)
     else
       return "ERROR: readInteger failed at " .. string.format("%X", addr)
     end
   elseif cmd:match("^readString (%x+) (%d+)$") then
-    local addr = tonumber(cmd:match("^readString (%x+) (%d+)$"), 16)
-    local maxlen = tonumber(cmd:match("^readString (%x+) (%d+)$"))
-    local s = readString(addr, maxlen)
-    if s then
+    local ahex, mxs = cmd:match("^readString (%x+) (%d+)$")
+    local addr = tonumber(ahex, 16)
+    local maxlen = tonumber(mxs)
+    if not addr then return "ERROR: BAD_ADDR" end
+    if not maxlen or maxlen < 1 then return "ERROR: BAD_SIZE" end
+    if maxlen > 4096 then maxlen = 4096 end
+    local ok, s = pcall(readString, addr, maxlen)
+    if ok and s then
       return fit_response(s)
     else
       return "ERROR: readString failed"
@@ -1777,12 +1795,19 @@ local function process_command(cmd)
     return string.format(
       "OK NAME=%s ADDR=%X DONOTSAVE=%d", scrub(name), addr, donotsave and 1 or 0)
   elseif cmd:match("^enumModules$") then
-    local list = enumModules()
-    if not list then return "ERROR: No module list available" end
+    local ok, list = pcall(enumModules)
+    if not ok or not list then return "ERROR: No module list available" end
     local lines = {}
-    for i, m in ipairs(list) do
-      lines[#lines + 1] = string.format("%X:%s", m.Address, m.Name)
-    end
+    local n = 0
+    pcall(function()
+      for i, m in ipairs(list) do
+        if m and m.Address and m.Name then
+          lines[#lines + 1] = string.format("%X:%s", m.Address, tostring(m.Name))
+          n = n + 1
+          if n >= 500 then break end
+        end
+      end
+    end)
     return fit_response(table.concat(lines, "\n"))
 
   -- Allow CE wildcards: ** or * in pattern (T00: old regex rejected them as Unknown command)
@@ -1792,10 +1817,15 @@ local function process_command(cmd)
     if pattern == "" then
       return "ERROR: Empty AOB pattern"
     end
-    local list = AOBScan(pattern)
+    local ok, list = pcall(AOBScan, pattern)
+    if not ok then
+      return "ERROR: AOBScan exception: " .. scrub(tostring(list))
+    end
     if not list then return "ERROR: AOBScan returned nothing" end
-    local result = list.Text
-    list.destroy()
+    local result = ""
+    pcall(function() result = list.Text or "" end)
+    pcall(function() list.destroy() end)
+    if result == "" then return "ERROR: AOBScan returned nothing" end
     return fit_response(result)
 
   elseif cmd:match("^runScriptSafe%s+(.+)$") then
