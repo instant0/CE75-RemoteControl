@@ -1,6 +1,6 @@
 local PIPE_NAME = "UEScanRemote"
 local PIPE_BUFFER = 65536
-local VERSION = "ce-server v1.8.3 (CE 7.5 groupscan)"
+local VERSION = "ce-server v1.8.4 (CE 7.5 restartable pipe)"
 local MAX_RESP = 48000
 local MAX_OFFSETS = 512
 local MAX_SCRIPT_BYTES = 262144  -- 256 KiB staging cap
@@ -980,7 +980,7 @@ local function process_command(cmd)
       "getAddress <symbol>", "resolveSymbol <name>",
       "AOBScan <hexpattern with optional ** wildcards>",
       "GroupScan <group command string>  (CE vtGrouped; main-thread memscan)",
-      "enumModules", "runScript <code>", "runScriptSafe <code>", "close"
+      "enumModules", "runScript <code>", "runScriptSafe <code>", "close", "shutdown"
     }, "|")
   elseif cmd == "getVersion" then
     return VERSION
@@ -1904,6 +1904,14 @@ local function process_command(cmd)
 
   elseif cmd == "close" then
     return "BYE"
+  elseif cmd == "shutdown" or cmd == "stop" then
+    -- Reply first; caller will break session. Unblock + exit thread.
+    pcall(function()
+      if _G._server_thread and _G._server_thread.terminate then
+        _G._server_thread.terminate()
+      end
+    end)
+    return "SHUTDOWN"
   end
   return "ERROR: Unknown command: " .. (cmd:match("^(%S+)") or "")
 end
@@ -1920,13 +1928,67 @@ _G._ue_scrub = scrub
 _G._ue_fit_response = fit_response
 _G._ue_MAX_RESP = MAX_RESP
 
--- Start server in background thread via createThread (CE UI stays responsive)
-if _G._server_thread then
-  print("UEScanServer is already running.")
-  print("Close the Lua Engine tab to stop, then re-run to restart.")
-else
+---------------------------------------------------------------------------
+-- Server lifecycle (v1.8.4)
+--
+-- createThread is a native TCEThread (FreeOnTerminate). Closing the Lua Engine
+-- console does NOT stop it. Re-running this script used to print "already
+-- running" and leave a stuck acceptConnection/ReadFile forever.
+--
+-- Fix: keep _G._server_pipe; on re-run terminate the thread AND destroy the
+-- pipe handle so ConnectNamedPipe/ReadFile unblock, then start a new thread.
+---------------------------------------------------------------------------
+
+local function destroy_server_pipe(reason)
+  local p = _G._server_pipe
+  _G._server_pipe = nil
+  if not p then return end
+  print("[server] destroy_server_pipe (" .. tostring(reason or "?") .. ")")
+  pcall(function()
+    if p.destroy then p.destroy() end
+  end)
+end
+
+local function stop_uescan_server(reason)
+  reason = reason or "stop"
+  print("[server] stop_uescan_server (" .. tostring(reason) .. ") " .. VERSION)
+  local t = _G._server_thread
+  if t then
+    pcall(function()
+      if t.terminate then t.terminate() end
+    end)
+  end
+  -- Unblocks acceptConnection / ReadFile on the server thread (single-instance pipe).
+  destroy_server_pipe("stop:" .. tostring(reason))
+  local n = 0
+  while t ~= nil and n < 80 do
+    local finished = false
+    pcall(function()
+      finished = (t.Finished == true)
+    end)
+    if finished then break end
+    if _G._server_thread == nil then break end
+    sleep(50)
+    n = n + 1
+  end
+  if _G._server_thread ~= nil then
+    print("[server] thread still not Finished after wait; clearing _server_thread global")
+    _G._server_thread = nil
+  end
+  -- Extra settle so Windows releases the pipe name before createPipe.
+  sleep(100)
+  print("[server] stop_uescan_server done")
+end
+
+local function start_uescan_server()
+  -- Always stop first so Execute on this file is a full restart (no CE quit).
+  if _G._server_thread or _G._server_pipe then
+    stop_uescan_server("restart")
+  end
+
   _G._server_thread = createThread(function(t)
     t.Name = "UEScanServer"
+    local self_thread = t
 
     print("[server] Background thread started " .. VERSION)
     while not t.Terminated do
@@ -1937,67 +1999,93 @@ else
         _G._server_error = "createPipe failed, retrying in 1s"
         sleep(1000)
       else
+        _G._server_pipe = pipe
         print("[server] Pipe created, waiting for client...")
         _G._server_error = nil
-        pipe.acceptConnection()
-        print("[server] Client connected!")
-        local seq = 0
-        while pipe.connected and not t.Terminated do
-          local cmd = read_length_prefixed(pipe)
-          if not cmd then
-            print("[server] Client disconnected (read returned nil)")
-            break
+        -- If stop_uescan_server destroys the pipe, acceptConnection returns / errors.
+        pcall(function()
+          pipe.acceptConnection()
+        end)
+        if t.Terminated then
+          print("[server] Terminated while waiting for client")
+        else
+          print("[server] Client connected!")
+          local seq = 0
+          while pipe.connected and not t.Terminated do
+            local cmd = read_length_prefixed(pipe)
+            if not cmd then
+              print("[server] Client disconnected (read returned nil)")
+              break
+            end
+            seq = seq + 1
+            local verb = cmd:match("^(%S+)") or cmd
+            local preview = cmd_preview(cmd, 240)
+            print(string.format("[server] EXEC start #%d %s | %s", seq, verb, preview))
+            local t0 = 0
+            pcall(function()
+              if type(getTickCount) == "function" then t0 = getTickCount() end
+            end)
+            local ok, resp = pcall(process_command, cmd)
+            local t1 = t0
+            pcall(function()
+              if type(getTickCount) == "function" then t1 = getTickCount() end
+            end)
+            local ms = (t1 and t0) and (t1 - t0) or -1
+            local out
+            if ok then
+              out = resp
+              local out_preview = scrub(tostring(out or "")):gsub("[\r\n]+", " ")
+              if #out_preview > 100 then out_preview = out_preview:sub(1, 100) .. "…" end
+              print(string.format(
+                "[server] EXEC done  #%d ok ms=%s out=%s",
+                seq, tostring(ms), out_preview))
+            else
+              out = "ERROR: " .. tostring(resp)
+              print(string.format(
+                "[server] EXEC fail  #%d ms=%s err=%s",
+                seq, tostring(ms), scrub(tostring(resp)):sub(1, 200)))
+            end
+            pcall(function()
+              audit_push(
+                verb,
+                preview:sub(1, 120),
+                tostring(out):match("^(.-)[\r\n]") or tostring(out):sub(1, 80))
+            end)
+            local wok, werr = pcall(write_length_prefixed, pipe, out)
+            if not wok then
+              print("[server] WRITE fail #" .. tostring(seq) .. " " .. scrub(tostring(werr)))
+              break
+            end
+            -- close = end this client session; shutdown = end server thread
+            if cmd == "close" or cmd == "shutdown" or cmd == "stop" then
+              break
+            end
           end
-          seq = seq + 1
-          local verb = cmd:match("^(%S+)") or cmd
-          local preview = cmd_preview(cmd, 240)
-          -- Print BEFORE executing. If the Lua thread dies mid-handler, the last
-          -- console line is this EXEC start (not just the verb).
-          print(string.format("[server] EXEC start #%d %s | %s", seq, verb, preview))
-          local t0 = 0
-          pcall(function()
-            if type(getTickCount) == "function" then t0 = getTickCount() end
-          end)
-          local ok, resp = pcall(process_command, cmd)
-          local t1 = t0
-          pcall(function()
-            if type(getTickCount) == "function" then t1 = getTickCount() end
-          end)
-          local ms = (t1 and t0) and (t1 - t0) or -1
-          local out
-          if ok then
-            out = resp
-            local out_preview = scrub(tostring(out or "")):gsub("[\r\n]+", " ")
-            if #out_preview > 100 then out_preview = out_preview:sub(1, 100) .. "…" end
-            print(string.format(
-              "[server] EXEC done  #%d ok ms=%s out=%s",
-              seq, tostring(ms), out_preview))
-          else
-            out = "ERROR: " .. tostring(resp)
-            -- pcall caught a Lua error — server thread should survive
-            print(string.format(
-              "[server] EXEC fail  #%d ms=%s err=%s",
-              seq, tostring(ms), scrub(tostring(resp)):sub(1, 200)))
-          end
-          pcall(function()
-            audit_push(
-              verb,
-              preview:sub(1, 120),
-              tostring(out):match("^(.-)[\r\n]") or tostring(out):sub(1, 80))
-          end)
-          local wok, werr = pcall(write_length_prefixed, pipe, out)
-          if not wok then
-            print("[server] WRITE fail #" .. tostring(seq) .. " " .. scrub(tostring(werr)))
-            break
-          end
-          if cmd == "close" then break end
         end
         print("[server] Destroying pipe...")
-        pipe.destroy()
+        if _G._server_pipe == pipe then
+          _G._server_pipe = nil
+        end
+        pcall(function()
+          if pipe.destroy then pipe.destroy() end
+        end)
         print("[server] Pipe destroyed")
       end
     end
     print("[server] Thread terminating")
-    _G._server_thread = nil
+    if _G._server_pipe then
+      destroy_server_pipe("thread_exit")
+    end
+    if _G._server_thread == self_thread then
+      _G._server_thread = nil
+    end
   end)
+
+  print("[server] start_uescan_server: thread launched")
 end
+
+_G._ue_stop_uescan_server = stop_uescan_server
+_G._ue_start_uescan_server = start_uescan_server
+_G._ue_destroy_server_pipe = destroy_server_pipe
+
+start_uescan_server()

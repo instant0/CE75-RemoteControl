@@ -11,6 +11,7 @@ Default: `192.168.176.1:8000`
 - `stEnsureSeed` if `stCount=0`
 - AA: enable one script at a time; `aaCheck` first
 - Use `client.py` / `./ce.sh` only (flock + denylist on `CERemote.cmd`)
+- **Restart pipe server:** re-Execute `ce_server.lua` (v1.8.4+); or `shutdown` then re-run; **not** “close Lua console”
 
 ## Client guardrails (`client.py`)
 - **Flock** `/tmp/ue-scan-ce-relay.client.lock` — second concurrent process waits (or `CE_RELAY_LOCK_NOWAIT=1` fails)

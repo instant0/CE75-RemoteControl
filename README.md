@@ -13,7 +13,7 @@ cheat table** without leaving CE.
 | Game-agnostic **skills** under `skills/` (how to operate CE remote) | Per-game research dumps under `skills/` |
 | **Dying Light 2** knowledge under `docs/game/DyingLight2/` (only game tree so far) | Default “use UE GEngine/GAS skills for every title” |
 
-**Server version:** `ce_server.lua` reports via `getVersion` (currently **v1.8.3**, includes `GroupScan`). Reload the script in CE after git pull.
+**Server version:** `ce_server.lua` reports via `getVersion` (currently **v1.8.4**, includes `GroupScan` + **restartable pipe**). Re-Execute the script in CE to restart the pipe server — do **not** rely on closing the Lua console (that does not stop the background thread).
 
 **Docs hub:** [docs/README.md](docs/README.md) — migration, hazards, group scan, game knowledge.  
 **Historical design only:** [SOLUTION.md](SOLUTION.md) (early designs including remote BP; **not** the shipped product).  
@@ -375,9 +375,12 @@ mode. This is correct for the length-prefixed protocol.
 | Connection refused (Windows) | Port conflict | Use `--port` to change port. Process list: `netstat -ano \| find :8888`. |
 | CE freezes (only if running old synchronous `ce_server.lua`) | Old version called `main()` on main thread | Update to the current `ce_server.lua` which uses `createThread` for background execution. |
 | Server responds to first command but hangs on reconnection | CE's `CreateNamedPipe` creates a single-instance pipe and `acceptConnection` doesn't call `DisconnectNamedPipe` before `ConnectNamedPipe` | Already fixed in current `ce_server.lua` — destroys and recreates the pipe per client. |
-| Relay: cannot connect to pipe after it worked | Lua pipe thread **killed/hung by a prior client command** (not “cold start flaky”) | Reload `ce_server.lua`. Relay does **not** retry pipe open — one attempt, then fail. |
+| Relay: cannot connect to pipe after it worked | Lua pipe thread **killed/hung by a prior client command** (not “cold start flaky”) | **Re-Execute `ce_server.lua`** (v1.8.4 stops old thread + destroys pipe, then starts fresh). Also stop/restart `windows_relay.py` if it still holds a client connection. |
+| “UEScanServer is already running” / cannot restart | **Old message** — pre-1.8.4 refused re-run; closing Lua console did **not** kill `createThread` | Use **v1.8.4+**: re-Execute always restarts. Manual stop: `_ue_stop_uescan_server("manual")` in Lua Engine, or client `shutdown`. |
+| PowerShell Connect to `UEScanRemote` times out while thread Terminated | Pipe already has a client (zombie relay) or thread stuck in `ReadFile` | Kill `windows_relay.py`, then re-Execute `ce_server.lua`. |
 | Timeout reading from pipe in relay | Client disconnected abruptly | No action needed — relay cleans up automatically. |
 | CE server doesn't detect disconnection (pipe appears busy) | Pending `ReadFile` in relay's `pipe_to_tcp` thread holds kernel reference after `CloseHandle` | Fixed in relay — uses `CancelIoEx` to cancel pending I/O across all threads before closing the handle. |
+| cmd.exe / relay process “fully hung”, need Task Manager | Pre-fix: **sync** pipe `ReadFile` with no timeout while CE stuck/dead | **windows_relay.py**: overlapped I/O + `--timeout` (default 300s), join caps, Ctrl+C on accept loop. Restart relay after CE re-Execute. |
 | `python: command not found` (Windows) | Python not on PATH | Reinstall Python and check "Add Python to PATH". |
 | WSL can't reach Windows | WSL2 network config | Use `ip route \| grep default` to get Windows host IP, then `python client.py --host <IP>`. |
 

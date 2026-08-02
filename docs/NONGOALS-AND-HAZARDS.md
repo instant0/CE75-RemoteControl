@@ -79,7 +79,7 @@ Details also in `skills/ce-remote-scanning/SKILL.md` § RELAY DISCIPLINE.
 | Hazard | Effect | Mitigation |
 |--------|--------|------------|
 | Client disconnect mid-command | Pipe destroy/recreate | Existing server loop; staging abort (T04) |
-| Re-execute `ce_server.lua` while thread live | “already running” | Document restart: close Lua Engine tab |
+| Re-execute `ce_server.lua` while thread live | Pre-1.8.4: “already running” and stuck pipe | **v1.8.4+:** re-Execute restarts (terminate + destroy `_server_pipe`). Do **not** rely on closing Lua Engine (does not stop `createThread`). |
 | Game killed during AA | CE error | pcall; ping health check |
 
 ## CE API quick facts (for implementers)
