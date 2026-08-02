@@ -10,12 +10,18 @@ Default: `192.168.176.1:8000`
 - `pcall` + nil guards + bounded loops in Lua
 - `stEnsureSeed` if `stCount=0`
 - AA: enable one script at a time; `aaCheck` first
+- Use `client.py` / `./ce.sh` only (flock + denylist on `CERemote.cmd`)
+
+## Client guardrails (`client.py`)
+- **Flock** `/tmp/ue-scan-ce-relay.client.lock` — second concurrent process waits (or `CE_RELAY_LOCK_NOWAIT=1` fails)
+- **Denylist** in `runScript`/`runScriptSafe`: `createMemScan`, `varscan_*`, `enumMemoryRegions`
+- **Pace** default `CE_RELAY_MIN_INTERVAL=0.15` s between commands (set `0` to disable)
 
 ## DON'T
 - Parallel relay calls / thrash / reconnect spam
 - Full-process / other-DLL scans — **gamedll + engine only** (see `scan-scope.md`)
 - **Global AOB of common small ints** (100/1000/stack counts) — see `scan-scope.md` HARD RULE
-- `enumMemoryRegions`, `createMemScan`, `varscan_*` from remote
+- `enumMemoryRegions`, `createMemScan`, `varscan_*` from remote (client blocks in runScript*)
 - `getStructure("Name")` — use `stFind` / `_ue_st_find_by_name`
 - Mass `Active=true`
 - Log full AA scripts

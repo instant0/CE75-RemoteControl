@@ -20,20 +20,42 @@ Usage:
     ce.st_ensure_seed()
     ce.st_clone("Src", "Src_v2")
 
+Relay safety (all go through CERemote.cmd — the method that sends one request):
+    - Exclusive flock so two client.py / ce.sh processes cannot hit the pipe at once
+    - Client denylist for createMemScan / enumMemoryRegions / varscan_* in runScript*
+    - Optional CE_RELAY_MIN_INTERVAL (seconds, default 0.15) between unlocks
+    - CE_RELAY_LOCK_NOWAIT=1 → fail immediately if another client holds the lock
+
 See docs/TABLE-MIGRATE.md and skills/ce-table-migrate/SKILL.md.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import socket
 import struct
 import sys
+import time
 from typing import List, Optional, Sequence, Union
 
 # Script chunk size in raw bytes (before hex). ~16k hex chars — under 48 KiB wire.
 SCRIPT_CHUNK = 8192
 SCRIPT_GET_CHUNK = 16384
+
+# Cross-process lock: only one TCP session to the relay at a time.
+_DEFAULT_LOCK_PATH = "/tmp/ue-scan-ce-relay.client.lock"
+_DEFAULT_MIN_INTERVAL = 0.15  # seconds after each cmd; CE_RELAY_MIN_INTERVAL overrides
+
+# Substrings (lowercase) refused inside runScript / runScriptSafe payloads.
+# Native GroupScan on the server may use createMemScan on the main thread — that
+# command name is allowed; only these patterns in free-form scripts are blocked.
+_RUNSCRIPT_BANNED = (
+    "creatememscan",
+    "memscan_firstscan",
+    "varscan_",
+    "enummemoryregions",
+)
 
 
 def _parse_kv(line: str) -> dict:
@@ -57,7 +79,6 @@ def _hex_decode(h: str) -> bytes:
 
 def _default_session_log_path() -> Optional[str]:
     """CE_SESSION_LOG=1 → logs/ce-session.log; CE_SESSION_LOG=/path → that file; unset → off."""
-    import os
     from pathlib import Path
 
     v = os.environ.get("CE_SESSION_LOG", "").strip()
@@ -71,7 +92,106 @@ def _default_session_log_path() -> Optional[str]:
     return v
 
 
+def _lock_path() -> str:
+    return os.environ.get("CE_RELAY_LOCK", "").strip() or _DEFAULT_LOCK_PATH
+
+
+def _min_interval_sec() -> float:
+    raw = os.environ.get("CE_RELAY_MIN_INTERVAL", "").strip()
+    if not raw:
+        return _DEFAULT_MIN_INTERVAL
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return _DEFAULT_MIN_INTERVAL
+
+
+def _lock_nowait() -> bool:
+    v = os.environ.get("CE_RELAY_LOCK_NOWAIT", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _check_client_denylist(command: str) -> Optional[str]:
+    """Return error message if command must not be sent; else None."""
+    if not command:
+        return None
+    low = command.lower()
+    # Only gate free-form Lua; native AOBScan / GroupScan / read* stay open.
+    if not (low.startswith("runscriptsafe") or low.startswith("runscript ")):
+        return None
+    for pat in _RUNSCRIPT_BANNED:
+        if pat in low:
+            return (
+                f"CLIENT_BLOCKED: refused runScript payload containing '{pat}' "
+                f"(use native AOBScan / GroupScan; createMemScan on pipe thread kills CE server)"
+            )
+    return None
+
+
+class _RelayClientLock:
+    """fcntl flock around one relay command (cross-process)."""
+
+    def __init__(self, path: str, nowait: bool, timeout: float):
+        self.path = path
+        self.nowait = nowait
+        # How long to wait for the lock (not the TCP timeout). Cap reasonably.
+        self.wait_timeout = max(5.0, min(timeout + 30.0, 600.0))
+        self._fd: Optional[int] = None
+
+    def __enter__(self) -> "_RelayClientLock":
+        import fcntl
+
+        parent = os.path.dirname(self.path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        self._fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o666)
+        flags = fcntl.LOCK_EX | (fcntl.LOCK_NB if self.nowait else 0)
+        if self.nowait:
+            try:
+                fcntl.flock(self._fd, flags)
+            except BlockingIOError as e:
+                os.close(self._fd)
+                self._fd = None
+                raise RuntimeError(
+                    f"CLIENT_BUSY: another CE client holds {_lock_path()} "
+                    f"(set CE_RELAY_LOCK_NOWAIT=0 to wait)"
+                ) from e
+        else:
+            deadline = time.monotonic() + self.wait_timeout
+            while True:
+                try:
+                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        os.close(self._fd)
+                        self._fd = None
+                        raise RuntimeError(
+                            f"CLIENT_BUSY: timed out after {self.wait_timeout:.0f}s "
+                            f"waiting for {_lock_path()}"
+                        )
+                    time.sleep(0.05)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        import fcntl
+
+        if self._fd is not None:
+            try:
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+            except Exception:
+                pass
+            try:
+                os.close(self._fd)
+            except Exception:
+                pass
+            self._fd = None
+
+
 class CERemote:
+    # Shared across instances in this process so interactive multi-cmd gaps work.
+    _last_cmd_end_mono: float = 0.0
+
     def __init__(
         self,
         host: str = "localhost",
@@ -90,7 +210,6 @@ class CERemote:
         path = self.session_log
         if not path:
             return
-        import os
         from datetime import datetime, timezone
 
         try:
@@ -107,35 +226,64 @@ class CERemote:
         except Exception:
             pass  # never break CE ops because of logging
 
+    def _pace_before_send(self) -> None:
+        gap = _min_interval_sec()
+        if gap <= 0:
+            return
+        last = CERemote._last_cmd_end_mono
+        if last <= 0:
+            return
+        wait = gap - (time.monotonic() - last)
+        if wait > 0:
+            time.sleep(wait)
+
     def cmd(self, command: str, timeout: Optional[float] = None) -> Optional[str]:
         """Send one length-prefixed command; optional per-call timeout (seconds).
+
+        Serializes concurrent client processes via flock, refuses known-dangerous
+        runScript payloads, and optionally paces between commands.
 
         If session_log is set (ctor or CE_SESSION_LOG env), appends each
         request/response (and errors/timeouts) so a dead server can be blamed
         on the last REQ without CE console access.
         """
+        blocked = _check_client_denylist(command)
+        if blocked:
+            self._seq += 1
+            self._log_session("ERR", blocked)
+            raise RuntimeError(blocked)
+
         t = self.timeout if timeout is None else timeout
         self._seq += 1
         self._log_session("REQ", command)
+
         try:
-            with socket.create_connection((self.host, self.port), t) as s:
-                s.settimeout(t)
-                data = command.encode("utf-8")
-                s.sendall(struct.pack("<I", len(data)) + data)
-                header = s.recv(4)
-                if len(header) < 4:
-                    self._log_session("ERR", "short/empty response header (server died mid-handler?)")
-                    return None
-                length = struct.unpack("<I", header)[0]
-                response = b""
-                while len(response) < length:
-                    chunk = s.recv(length - len(response))
-                    if not chunk:
-                        break
-                    response += chunk
-                out = response.decode("utf-8", errors="replace")
-                self._log_session("RSP", out)
-                return out
+            with _RelayClientLock(_lock_path(), _lock_nowait(), t):
+                self._pace_before_send()
+                try:
+                    with socket.create_connection((self.host, self.port), t) as s:
+                        s.settimeout(t)
+                        data = command.encode("utf-8")
+                        s.sendall(struct.pack("<I", len(data)) + data)
+                        header = s.recv(4)
+                        if len(header) < 4:
+                            self._log_session(
+                                "ERR",
+                                "short/empty response header (server died mid-handler?)",
+                            )
+                            return None
+                        length = struct.unpack("<I", header)[0]
+                        response = b""
+                        while len(response) < length:
+                            chunk = s.recv(length - len(response))
+                            if not chunk:
+                                break
+                            response += chunk
+                        out = response.decode("utf-8", errors="replace")
+                        self._log_session("RSP", out)
+                        return out
+                finally:
+                    CERemote._last_cmd_end_mono = time.monotonic()
         except Exception as e:
             self._log_session("ERR", f"{type(e).__name__}: {e}")
             raise
@@ -454,7 +602,12 @@ def main():
     ce = CERemote(args.host, args.port, args.timeout, session_log=args.session_log)
 
     if args.cmd:
-        result = ce.cmd(args.cmd)
+        try:
+            result = ce.cmd(args.cmd)
+        except RuntimeError as e:
+            # CLIENT_BLOCKED / CLIENT_BUSY — do not look like a dead relay
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(2)
         if result is None:
             print("ERROR: No response from CE server", file=sys.stderr)
             sys.exit(1)
