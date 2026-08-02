@@ -272,7 +272,7 @@ Example CT rows (after **PlayerVariables** catalog base resolves):
 | `2E38` | InfiniteStamina (bool-ish) | table toggle — use **byte** type |
 | `36C0` | MaxStamina | default ~0.8 (verify on **20260801** map) |
 | `3438` | **MaxHealth** | **config** max, not current HP (1.90-era; check current map) |
-| `2E78` / `2E90` | ItemsBuyFactor / ItemsSellFactor | economy multipliers |
+| `3320` / `3338` | **ItemBuyFactor** / **ItemSellFactor** | economy multipliers (20260801 map; **not** legacy `2E78`/`2E90`) |
 | `23E0`… | Glide* costs | defaults in field names (1.90 offsets differ from 20260801) |
 
 Prefer **20260801** offsets from the live structure over this historical table.  

@@ -28,7 +28,7 @@
 | **Current hit points (Real HP)** | **`lifecs::PrivHealth::LifeHealth` + 0x1C** | Via **`PlayerHealthModule`** → LifeHealth ptrs, or entity chain |
 | **Max HP (runtime)** | LifeHealth **+0x2C / +0x30 / +0x34** (labeled Max HP in CT dump) | Same module |
 | **Money (old-world cash amount)** | **`InventoryMoney` + 0x38** field **Money** | Inventory / PlayerDI chain — not the playerStat float blob |
-| **Shop pricing** | `playerStat + 0x2E78` BuyFactor, `+ 0x2E90` SellFactor | Already in CT under Money group |
+| **Shop pricing** | `PlayerVariables + 0x3320` ItemBuyFactor, `+ 0x3338` ItemSellFactor | CT Money/Vendors group; FPV map `20260801` |
 
 “Old world money” in DL2 is inventory **currency** (`InventoryMoney`, `EGuiCurrencyType`, GUI `money_icon` / `&Cash_Cash_N&`), not a `FloatPlayerVariable` named OldWorldMoney in the dumps we searched.
 
@@ -95,14 +95,15 @@ Useful health-adjacent **defaults** (not current HP):
 | `0x2D0` | AfterDeathHealthRegenTime |
 | `0x1DA0` | FinisherKnockdownEnemyMaxHealth |
 
-Economy (table already uses):
+Economy (FPV `FloatPlayerVariable_20260801` / CT Money/Vendors):
 
 | Offset | Name | CT use |
 |--------|------|--------|
-| `0x2E78` | ItemsBuyFactor | cheap buys |
-| `0x2E90` | ItemsSellFactor | gold reward |
+| `0x3320` | **ItemBuyFactor** | soft nearly-free vendors (e.g. `0.0001`) |
+| `0x3338` | **ItemSellFactor** | sell payout multiplier (e.g. `50`) |
 
-Require live **`playerStat`** to sample.
+**Not** `0x2E78` / `0x2E90` (those are `HealthCriticalPP*` on the current map).  
+Require live **`PlayerVariables`** catalog base to sample.
 
 ---
 
