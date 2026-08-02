@@ -15,3 +15,4 @@ docs/game/**/raw/
 
 # Optional local session artifacts
 logs/
+.grok
